@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools >= 70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "multipospdf"
+version = "1.0.0"
+requires-python = ">= 3.10"
+dependencies = ["scipy","numpy","matplotlib","fabio","cryio","pyFAI"]
+authors = [{name = "Kenneth P. Marshall", email = "kenneth.marshall@esrf.fr"}]
+maintainers = [{name = "Kenneth P. Marshall", email = "kenneth.marshall@esrf.fr"}]
+description = "library for processing X-ray total scattering data taken from multiple detector positions"
+readme = {file = "README.MD", content-type = "text/markdown"}
+keywords = ["PDF", "synchrotron", "total-scattering"]
+classifiers = [
+"Programming Language :: Python :: 3.13"]
+
+[tool.setuptools]
+packages = ["multipospdf"]
+
+#[project.urls]
+#repository = "https://github.com/msujas/pdfgetx3_gui.git"
