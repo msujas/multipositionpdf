@@ -6,7 +6,7 @@ import os, fabio
 from glob import glob
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d, interpn, RegularGridInterpolator, LinearNDInterpolator
+from scipy.interpolate import interp1d, RegularGridInterpolator, LinearNDInterpolator
 from pyFAI.geometry import Geometry
 
 def bubbleHeader(file2d,array2d, tth, eta, y, e):
