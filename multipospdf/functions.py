@@ -6,7 +6,7 @@ import os, fabio
 from glob import glob
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d, interp2d, RegularGridInterpolator
+from scipy.interpolate import interp1d, interpn, RegularGridInterpolator, LinearNDInterpolator
 from pyFAI.geometry import Geometry
 
 def bubbleHeader(file2d,array2d, tth, eta, y, e):
@@ -66,11 +66,28 @@ class PoniList():
         self.distances = [p.dist for p in self.__list__]
         self.wavelengths = [p.wavelength for p in self.__list__]
         self.detectors = [p.detector for p in self.__list__]
+        self.interpolationFunctions()
+        allsame = (np.array(self.zpositions) == self.zpositions[0]).all()
+        self.poniinterpolation = '1d'
+        if not None in self.zpositions and not allsame:
+            self.poniinterpolation = '2d'
+            self.interpolationFunctions2d()
     def __setitem__(self, key, value):
         self.__list__[key] = value
         self.getValues()
-
-    
+    def interpolationFunctions(self):
+        self.poni1int = interp1d(self.ypositions, self.poni1s)
+        self.poni2int = interp1d(self.ypositions,self.poni2s)
+        self.distint = interp1d(self.ypositions,self.distances)
+        self.rot1int =interp1d(self.ypositions,self.rot1s)
+        self.rot2int = interp1d(self.ypositions, self.rot2s)       
+    def interpolationFunctions2d(self):
+        self.poni1int2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)), self.poni1s)
+        self.poni2int2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)),self.poni2s)
+        self.distint2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)),self.distances)
+        self.rot1int2d =LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)),self.rot1s)
+        self.rot2int2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)), self.rot2s)
+        
 class FilePoni():
     def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None):
         self.fname = fname
@@ -92,29 +109,20 @@ class FilePoni():
         self.zpositions = self.ponilist.zpositions 
 
     def interpolatePoni(self, basemask:str = None):
-        poni1int = interp1d(self.ypositions, self.poni1s)
-        poni2int = interp1d(self.ypositions,self.poni2s)
-        distint = interp1d(self.ypositions,self.dists)
-        rot1int =interp1d(self.ypositions,self.rot1s)
-        rot2int = interp1d(self.ypositions, self.rot2s)
-        self.poni1 = poni1int(self.ypos)
-        self.poni2 = poni2int(self.ypos)
-        self.dist = distint(self.ypos)
-        self.rot1 = rot1int(self.ypos)
-        self.rot2 = rot2int(self.ypos)
+        self.poni1 = self.ponilist.poni1int(self.ypos)
+        self.poni2 = self.ponilist.poni2int(self.ypos)
+        self.dist = self.ponilist.distint(self.ypos)
+        self.rot1 = self.ponilist.rot1int(self.ypos)
+        self.rot2 = self.ponilist.rot2int(self.ypos)
         self.rot3=0
         self.integrate(basemask)
     def interpolatePoni2D(self,basemask:str=None):
-        poni1int = interp2d(self.ypositions,self.zpositions, self.poni1s)
-        poni2int = interp2d(self.ypositions,self.zpositions,self.poni2s)
-        distint = interp2d(self.ypositions,self.zpositions,self.dists)
-        rot1int =interp2d(self.ypositions,self.zpositions,self.rot1s)
-        rot2int = interp2d(self.ypositions,self.zpositions, self.rot2s)
-        self.poni1 = poni1int(self.ypos,self.zpos)
-        self.poni2 = poni2int(self.ypos,self.zpos)
-        self.dist = distint(self.ypos,self.zpos)
-        self.rot1 = rot1int(self.ypos,self.zpos)
-        self.rot2 = rot2int(self.ypos,self.zpos)
+
+        self.poni1 = self.ponilist.poni1int2d(self.ypos,self.zpos)
+        self.poni2 = self.ponilist.poni2int2d(self.ypos,self.zpos)
+        self.dist = self.ponilist.distint2d(self.ypos,self.zpos)
+        self.rot1 = self.ponilist.rot1int2d(self.ypos,self.zpos)
+        self.rot2 = self.ponilist.rot2int2d(self.ypos,self.zpos)
         self.rot3 = 0
         self.integrate(basemask)
 
@@ -160,7 +168,7 @@ class FilePoni():
         self.chibinarray = (self.sinchi2*chibins).astype(int)
         self.combinedbinarray = self.tthbinarray+1j*self.chibinarray
         return self.combinedbinarray
-    
+
 class MultiFile():
     def __init__(self,alist:list[FilePoni]):
         self.list = alist
@@ -170,9 +178,16 @@ class MultiFile():
     def average1d(self,x0,xend,npoints, basemask:str=None):
         self.x = np.linspace(x0,xend,npoints)
         avarray = np.empty(shape=(len(self.x), len(self.list)))
+        
+        poniinterpolation = self.list[0].ponilist.poniinterpolation
+
         if not self.list[0].integrated:
+            print(f'interpolating ponis in {poniinterpolation} and integrating files')
             for file in self.list:
-                file.interpolatePoni(basemask=basemask)
+                match poniinterpolation:
+                    case '1d': file.interpolatePoni(basemask=basemask)
+                    case '2d': file.interpolatePoni2D(basemask=basemask)
+                    case _: raise ValueError('poniinterpolation must be "1d" or "2d"')
         for i,file in enumerate(self.list):
             gridfunc = interp1d(file.x,file.y)
             avarray[:,i] = gridfunc(self.x)
