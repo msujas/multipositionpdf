@@ -10,9 +10,9 @@ from multipospdf import *
 
 
 ponidir = r'D:\beamlineData\April2026\multipositions\Si'
-direc = r'D:\beamlineData\April2026\multipositions\Si'
-maskfile = r'D:\beamlineData\April2026\multipositions/baseMask_April2026.edf' #None to not use
-cakemask = r'D:\beamlineData\April2026\multipositions/cakemask.edf' #None to not use
+direc = r'D:\beamlineData\April2026\multipositions\C60'
+maskfile = r'D:\beamlineData\April2026\multipositions/baseMask_April2026.edf' # mask file to apply to all cbf images. None to not use
+cakemask = r'D:\beamlineData\April2026\multipositions/cakemask.edf' #mask file to apply to final merged cake. Must generate initial cake first. None to not use
 tthmin = 0.75
 tthmax = 58
 datadir = f'{direc}/multiPDF0'
@@ -41,7 +41,7 @@ def readponis(direc, ypositions = None) -> PoniList:
             ypos = ypositions[index-1]
         else:
             ypos = index
-        ponilist.append(PoniData(pyFAI.load(p),ypos))
+        ponilist.append(PoniData(pyFAI.load(p),ypos, zpos=0))
     return ponilist
 
 def plotponi(direc, sifiles:dict):
@@ -86,10 +86,10 @@ def readData(direc):
 datadct = readData(datadir)
 ypositions = list(datadct.keys())
 files = list(datadct.values())
-ponidct = readponis(ponidir, ypositions)
+ponilist = readponis(ponidir, ypositions)
 #plotponi(direc, sidct)
 
-flist = [FilePoni(f,y,ponidct) for f,y in zip(files,ypositions)]
+flist = [FilePoni(f,y,ponilist) for f,y in zip(files,ypositions)]
 multi = MultiFile(flist)
 
 def plotFilePonis(fileponis:list[FilePoni]):
@@ -135,13 +135,16 @@ def getbinarrays(flist:list[FilePoni], tthbins, chibins, tthmax):
     for f in flist:
         f.arrayBins(tthbins, chibins, tthmax)
 
+
+#ponilist.plot1d()
+
 print('interpolating ponis, integrating 1d')
 x,y = multi.average1d(tthmin,tthmax,5000,basemask=maskfile)
 np.savetxt(f'{direc}/av1d.xy',np.array([x,y]).transpose(),fmt='%.6f')
 #multi.plotAll1d()
 print('calculating cakes')
 av2d = multi.regrid2d(tthmin,tthmax,5000, outdir=f'{datadir}/cake', cakemask=cakemask)
-#multi.saveEDF_noheader(direc)
+
+#multi.saveEDF_noheader(direc) #use this to generate a cake file with no header modification, so it can be read with silx/pyFAI for making mask
 #plt.imshow(av2d,aspect='auto')
 #plt.show()
-#getbinarrays(flist, 1600, 1000, 60)

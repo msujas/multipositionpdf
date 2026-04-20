@@ -87,6 +87,44 @@ class PoniList():
         self.distint2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)),self.distances)
         self.rot1int2d =LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)),self.rot1s)
         self.rot2int2d = LinearNDInterpolator(list(zip(self.ypositions,self.zpositions)), self.rot2s)
+    def plot1d(self):
+        plt.figure(dpi = 150)
+        plt.plot(self.ypositions, self.poni1s,'o-',label = 'poni1')
+        plt.plot(self.ypositions,self.poni2s,'o-',label = 'poni2')
+        plt.plot(self.ypositions,self.rot1s,'o-',label = 'rot1')
+        plt.plot(self.ypositions,self.rot2s,'o-',label = 'rot2')
+        plt.plot(self.ypositions,self.rot3s,'o-',label = 'rot3')
+        plt.plot(self.ypositions,self.distances,'o-',label = 'distance')
+        plt.legend()
+        plt.xlabel('y-position')
+        plt.show()
+    def plot2d(self):
+        y,z = np.meshgrid(self.ypositions,self.zpositions)
+        poni1s = self.poni1int2d(y,z)
+        poni2s = self.poni2int2d(y,z)
+        rot1s = self.rot1int2d(y,z)
+        rot2s = self.rot2int2d(y,z)
+        distances = self.distint2d(y,z)
+
+        fig,ax = plt.subplots(3,2,dpi=150)
+        ax[0,0].pcolormesh(y,z,poni1s,shading='auto')
+        ax[0,0].colorbar()
+        ax[0,0].set_title('poni1')
+        ax[0,1].pcolormesh(y,z,poni2s,shading='auto')
+        ax[0,1].colorbar()
+        ax[0,1].set_title('poni2')
+        ax[0,2].pcolormesh(y,z,rot1s,shading='auto')
+        ax[0,2].colorbar()
+        ax[0,2].set_title('rot1')
+        ax[1,0].pcolormesh(y,z,rot2s,shading='auto')
+        ax[1,0].colorbar()
+        ax[1,0].set_title('rot2')
+        ax[1,1].pcolormesh(y,z,distances,shading='auto')
+        ax[1,1].set_title('distance')
+        ax[1,1].colorbar()
+
+        plt.show()
+
         
 class FilePoni():
     def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None):
@@ -116,8 +154,8 @@ class FilePoni():
         self.rot2 = self.ponilist.rot2int(self.ypos)
         self.rot3=0
         self.integrate(basemask)
-    def interpolatePoni2D(self,basemask:str=None):
 
+    def interpolatePoni2D(self,basemask:str=None):
         self.poni1 = self.ponilist.poni1int2d(self.ypos,self.zpos)
         self.poni2 = self.ponilist.poni2int2d(self.ypos,self.zpos)
         self.dist = self.ponilist.distint2d(self.ypos,self.zpos)
@@ -207,6 +245,8 @@ class MultiFile():
                  outdir = None, cakemask:str = None):
         tthgrid = np.linspace(tth0,tthend, tthpoints)
         chigrid = np.linspace(chi0,chiend,chipoints)
+        #mesh2 = np.meshgrid(chigrid,tthgrid)
+        #mesh2 = np.array(list(zip(mesh2[0],mesh2[1])))
         mesh = np.empty(shape=(len(chigrid),len(tthgrid),2))
         for i in range(len(chigrid)):
             for j in range(len(tthgrid)):
