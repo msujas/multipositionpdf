@@ -40,41 +40,57 @@ class PoniData():
         self.wavelength = self.poni.wavelength
         self.detector = self.poni.detector
 
-class PoniDct():
-    def __init__(self):
-        self.__dict__ = {}
+class PoniList():
+    def __init__(self, alist:list[PoniData] = None):
+        self.__list__ : list[PoniData] = []
+        if alist:
+            self.__list__ = alist
+            self.getValues()
     def __getitem__(self, key) -> PoniData :
-        return self.__dict__[key]
+        return self.__list__[key]
     def __contains__(self, item):
-        return item in self.__dict__
+        return item in self.__list__
     def __iter__(self):
-        return iter(self.__dict__)
+        return iter(self.__list__)
+    def append(self,item):
+        self.__list__.append(item)
+        self.getValues()
+    def getValues(self):
+        self.ypositions = [p.ypos for p in self.__list__]
+        self.zpositions = [p.zpos for p in self.__list__]
+        self.poni1s = [p.poni1 for p in self.__list__]
+        self.poni2s = [p.poni2 for p in self.__list__]
+        self.rot1s = [p.rot1 for p in self.__list__]
+        self.rot2s = [p.rot2 for p in self.__list__]
+        self.rot3s = [p.rot3 for p in self.__list__]
+        self.distances = [p.dist for p in self.__list__]
+        self.wavelengths = [p.wavelength for p in self.__list__]
+        self.detectors = [p.detector for p in self.__list__]
     def __setitem__(self, key, value):
-        self.__dict__[key] = value
-    def keys(self):
-        return self.__dict__.keys()
-    def values(self):
-        return self.__dict__.values()
+        self.__list__[key] = value
+        self.getValues()
+
     
 class FilePoni():
-    def __init__(self, fname:str, ypos:float, ponidct:PoniDct, zpos:float = None):
+    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None):
         self.fname = fname
         self.ypos = ypos
         self.zpos = zpos
-        self.ponidct = ponidct
-        self.aiexample:AzimuthalIntegrator = list(ponidct.values())[0]
+        self.ponilist = ponilist
+        self.aiexample:AzimuthalIntegrator = ponilist[0].poni
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
         self.array = CbfImage(fname).array
         
         self.integrated = False
-        self.poni1s = [self.ponidct[p].poni1 for p in self.ponidct]
-        self.poni2s = [self.ponidct[p].poni2 for p in self.ponidct]
-        self.dists = [self.ponidct[p].dist for p in self.ponidct]
-        self.rot1s = [self.ponidct[p].rot1 for p in self.ponidct]
-        self.rot2s = [self.ponidct[p].rot2 for p in self.ponidct]
-        self.ypositions = [self.ponidct[p].ypos for p in self.ponidct]
-        self.zpositions = [self.ponidct[p].zpos for p in self.ponidct]
+        self.poni1s = self.ponilist.poni1s 
+        self.poni2s = self.ponilist.poni2s 
+        self.dists = self.ponilist.distances 
+        self.rot1s = self.ponilist.rot1s 
+        self.rot2s = self.ponilist.rot2s 
+        self.ypositions = self.ponilist.ypositions 
+        self.zpositions = self.ponilist.zpositions 
+
     def interpolatePoni(self, basemask:str = None):
         poni1int = interp1d(self.ypositions, self.poni1s)
         poni2int = interp1d(self.ypositions,self.poni2s)
@@ -176,16 +192,15 @@ class MultiFile():
                  outdir = None, cakemask:str = None):
         tthgrid = np.linspace(tth0,tthend, tthpoints)
         chigrid = np.linspace(chi0,chiend,chipoints)
-        mesh = np.array(np.meshgrid(tthgrid,chigrid))
-        mesh2 = np.empty(shape=(mesh.shape[1],mesh.shape[2],mesh.shape[0]))
-        for i in range(mesh.shape[1]):
-            for j in range(mesh.shape[2]):
-                mesh2[i,j] = [mesh[1,i,j],mesh[0,i,j]]
-        ndlist = np.empty(shape = (*mesh2.shape[:2],len(self.list)))
+        mesh = np.empty(shape=(len(chigrid),len(tthgrid),2))
+        for i in range(len(chigrid)):
+            for j in range(len(tthgrid)):
+                mesh[i,j] = [chigrid[i],tthgrid[j]]
+        ndlist = np.empty(shape = (*mesh.shape[:2],len(self.list)))
         for i,item in enumerate(self.list):
             interparray = np.where(item.array2d<=0, np.nan, item.array2d)
             rgf = RegularGridInterpolator((item.chi,item.tth), interparray)
-            newdata = rgf(mesh2)
+            newdata = rgf(mesh)
             ndlist[:,:,i] = newdata
         stdev = np.nanstd(ndlist,axis=2)
         median = np.nanmedian(ndlist,axis = 2)

@@ -10,7 +10,7 @@ from multipospdf import *
 
 
 ponidir = r'D:\beamlineData\April2026\multipositions\Si'
-direc = r'D:\beamlineData\April2026\multipositions\C60'
+direc = r'D:\beamlineData\April2026\multipositions\Si'
 maskfile = r'D:\beamlineData\April2026\multipositions/baseMask_April2026.edf' #None to not use
 cakemask = r'D:\beamlineData\April2026\multipositions/cakemask.edf' #None to not use
 tthmin = 0.75
@@ -30,10 +30,10 @@ def readfiles(direc):
     return dataset
 
 
-def readponis(direc, ypositions = None) -> PoniDct:
+def readponis(direc, ypositions = None) -> PoniList:
     ponis = glob(f'{direc}/*MD.poni')
     ponis.sort()
-    ponidct = PoniDct()
+    ponilist = PoniList()
     for p in ponis:
         basename= os.path.basename(p)
         index = int(basename.split('_')[0].replace('pos',''))
@@ -41,8 +41,8 @@ def readponis(direc, ypositions = None) -> PoniDct:
             ypos = ypositions[index-1]
         else:
             ypos = index
-        ponidct[basename] = PoniData(pyFAI.load(p),ypos)
-    return ponidct
+        ponilist.append(PoniData(pyFAI.load(p),ypos))
+    return ponilist
 
 def plotponi(direc, sifiles:dict):
     ypositions = list(sifiles.keys())
