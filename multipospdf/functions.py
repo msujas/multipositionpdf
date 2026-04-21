@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, RegularGridInterpolator, LinearNDInterpolator
 from pyFAI.geometry import Geometry
 
+
 def bubbleHeader(file2d,array2d, tth, eta, y, e):
     xye = np.array([tth,y,e]).transpose().flatten()
     xyestring = ' '.join([str(i) for i in xye])
@@ -99,30 +100,34 @@ class PoniList():
         plt.xlabel('y-position')
         plt.show()
     def plot2d(self):
-        y,z = np.meshgrid(self.ypositions,self.zpositions)
+        ygrid = np.linspace(min(self.ypositions),max(self.ypositions), 20)
+        zgrid = np.linspace(min(self.zpositions),max(self.zpositions),20)
+        y,z = np.meshgrid(ygrid,zgrid)
         poni1s = self.poni1int2d(y,z)
         poni2s = self.poni2int2d(y,z)
         rot1s = self.rot1int2d(y,z)
         rot2s = self.rot2int2d(y,z)
         distances = self.distint2d(y,z)
-
-        fig,ax = plt.subplots(3,2,dpi=150)
-        ax[0,0].pcolormesh(y,z,poni1s,shading='auto')
-        ax[0,0].colorbar()
-        ax[0,0].set_title('poni1')
-        ax[0,1].pcolormesh(y,z,poni2s,shading='auto')
-        ax[0,1].colorbar()
-        ax[0,1].set_title('poni2')
-        ax[0,2].pcolormesh(y,z,rot1s,shading='auto')
-        ax[0,2].colorbar()
-        ax[0,2].set_title('rot1')
-        ax[1,0].pcolormesh(y,z,rot2s,shading='auto')
-        ax[1,0].colorbar()
-        ax[1,0].set_title('rot2')
-        ax[1,1].pcolormesh(y,z,distances,shading='auto')
-        ax[1,1].set_title('distance')
-        ax[1,1].colorbar()
-
+        markersize=  5
+        plotdct = {'poni1':poni1s,
+                   'poni2':poni2s,
+                   'rot1':rot1s,
+                   'rot2':rot2s,
+                   'distances':distances}
+        fig,ax = plt.subplots(2,3,dpi=150,figsize=(6.4*1.5,4.8))
+        for i,item in enumerate(plotdct):
+            xplot = i%3
+            yplot = i//3
+            im = ax[yplot,xplot].pcolormesh(y,z,plotdct[item],shading='auto')
+            ax[yplot,xplot].scatter(self.ypositions,self.zpositions,c='red',s=markersize)
+            fig.colorbar(im, ax=ax[yplot,xplot])
+            ax[yplot,xplot].set_title(item)
+        lasti = i
+        for i in range(lasti+1,6):
+            yplot = (i)//3
+            xplot = (i)%3
+            fig.delaxes(ax[yplot,xplot])
+            plt.tight_layout()
         plt.show()
 
         
@@ -167,15 +172,7 @@ class FilePoni():
     def integrate(self,basemask:str = None):
         self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
-        self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
-                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
-        
-        self.ttharray:np.ndarray = self.geometry.twoThetaArray()
-        self.chiarray:np.ndarray = self.geometry.chiArray()
-        self.pol:np.ndarray = self.geometry.polarization(factor=0.99)
-        self.sa :np.ndarray = self.geometry.solidAngleArray()
-        self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
-        self.arrayCorrected = self.array/(self.pol*self.sa)
+
         mask = np.where(self.array < 0,1,0)
         if basemask:
             mask = fabio.open(basemask).data
@@ -199,6 +196,30 @@ class FilePoni():
         self.chi = self.result2d[2]
         self.integrated= True
         
+    def saveMaps(self,dirname):
+        self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
+                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
+        
+        self.ttharray:np.ndarray = self.geometry.twoThetaArray()
+        self.chiarray:np.ndarray = self.geometry.chiArray()
+        self.pol:np.ndarray = self.geometry.polarization(factor=0.99)
+        self.sa :np.ndarray = self.geometry.solidAngleArray()
+        self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
+        self.arrayCorrected = self.array/(self.pol*self.sa)
+        basename = os.path.splitext(os.path.basename(self.fname))[0]
+        basename += '.edf'
+        os.makedirs(f'{dirname}/tth',exist_ok=True)
+        os.makedirs(f'{dirname}/sa',exist_ok=True)
+        os.makedirs(f'{dirname}/pol',exist_ok=True)
+        os.makedirs(f'{dirname}/chi',exist_ok=True)
+        im = EdfImage(self.ttharray)
+        im.save(f'{dirname}/tth/{basename}')
+        im = EdfImage(self.chiarray)
+        im.save(f'{dirname}/chi/{basename}')
+        im=EdfImage(self.pol)
+        im.save(f'{dirname}/pol/{basename}')
+        im=EdfImage(self.sa)
+        im.save(f'{dirname}/sa/{basename}')
 
     def arrayBins(self,tthbins:int, chibins:int, tthmax:float):
         tthmax = tthmax*np.pi/180
@@ -210,9 +231,17 @@ class FilePoni():
 class MultiFile():
     def __init__(self,alist:list[FilePoni]):
         self.list = alist
-    def integrateAll(self):
+    def saveMaps(self,dirname):
+        for f in self.list:
+            f.saveMaps(dirname)
+    def integrateAll(self, basemask = None):
+        poniinterp = self.list[0].ponilist.poniinterpolation
+        print(f'interpolating ponis in {poniinterp} and integrating')
         for file in self.list:
-            file.interpolatePoni()
+            match self.list[0].ponilist.poniinterpolation:
+                case '1d': file.interpolatePoni(basemask=basemask)
+                case '2d': file.interpolatePoni2D(basemask=basemask)
+                case _: raise ValueError('interpolation dimension must be 1d or 2d')
     def average1d(self,x0,xend,npoints, basemask:str=None):
         self.x = np.linspace(x0,xend,npoints)
         avarray = np.empty(shape=(len(self.x), len(self.list)))
@@ -227,9 +256,9 @@ class MultiFile():
                     case '2d': file.interpolatePoni2D(basemask=basemask)
                     case _: raise ValueError('poniinterpolation must be "1d" or "2d"')
         for i,file in enumerate(self.list):
-            gridfunc = interp1d(file.x,file.y)
+            gridfunc = interp1d(file.x,file.y, fill_value=np.nan, bounds_error=False)
             avarray[:,i] = gridfunc(self.x)
-        self.yav = avarray.mean(axis=1)
+        self.yav = np.nanmean(avarray,axis=1)
         return self.x,self.yav
     def plotAll1d(self):
         plt.figure()
@@ -245,8 +274,6 @@ class MultiFile():
                  outdir = None, cakemask:str = None):
         tthgrid = np.linspace(tth0,tthend, tthpoints)
         chigrid = np.linspace(chi0,chiend,chipoints)
-        #mesh2 = np.meshgrid(chigrid,tthgrid)
-        #mesh2 = np.array(list(zip(mesh2[0],mesh2[1])))
         mesh = np.empty(shape=(len(chigrid),len(tthgrid),2))
         for i in range(len(chigrid)):
             for j in range(len(tthgrid)):
@@ -254,7 +281,7 @@ class MultiFile():
         ndlist = np.empty(shape = (*mesh.shape[:2],len(self.list)))
         for i,item in enumerate(self.list):
             interparray = np.where(item.array2d<=0, np.nan, item.array2d)
-            rgf = RegularGridInterpolator((item.chi,item.tth), interparray)
+            rgf = RegularGridInterpolator((item.chi,item.tth), interparray, fill_value=np.nan, bounds_error=False)
             newdata = rgf(mesh)
             ndlist[:,:,i] = newdata
         stdev = np.nanstd(ndlist,axis=2)
