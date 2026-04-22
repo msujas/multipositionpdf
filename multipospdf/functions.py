@@ -137,7 +137,7 @@ class PoniList():
 
         
 class FilePoni():
-    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None):
+    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None):
         self.fname = fname
         self.ypos = ypos
         self.zpos = zpos
@@ -155,32 +155,33 @@ class FilePoni():
         self.rot2s = self.ponilist.rot2s 
         self.ypositions = self.ponilist.ypositions 
         self.zpositions = self.ponilist.zpositions 
+        self.maskfile = maskfile
 
-    def interpolatePoni(self, basemask:str = None, **kwargs):
+    def interpolatePoni(self,  **kwargs):
         self.poni1 = self.ponilist.poni1int(self.ypos)
         self.poni2 = self.ponilist.poni2int(self.ypos)
         self.dist = self.ponilist.distint(self.ypos)
         self.rot1 = self.ponilist.rot1int(self.ypos)
         self.rot2 = self.ponilist.rot2int(self.ypos)
         self.rot3=0
-        self.integrate(basemask, **kwargs)
+        self.integrate(**kwargs)
 
-    def interpolatePoni2D(self,basemask:str=None, **kwargs):
+    def interpolatePoni2D(self, **kwargs):
         self.poni1 = self.ponilist.poni1int2d(self.ypos,self.zpos)
         self.poni2 = self.ponilist.poni2int2d(self.ypos,self.zpos)
         self.dist = self.ponilist.distint2d(self.ypos,self.zpos)
         self.rot1 = self.ponilist.rot1int2d(self.ypos,self.zpos)
         self.rot2 = self.ponilist.rot2int2d(self.ypos,self.zpos)
         self.rot3 = 0
-        self.integrate(basemask, **kwargs)
+        self.integrate(**kwargs)
 
-    def integrate(self,basemask:str = None, gainfile = None, xyedir = 'xye', cakedir = 'cake'):
+    def integrate(self, gainfile = None, xyedir = 'xye', cakedir = 'cake'):
         self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
 
         mask = np.where(self.array < 0,1,0)
-        if basemask:
-            mask = fabio.open(basemask).data
+        if self.maskfile:
+            mask = fabio.open(self.maskfile).data
         dirname = os.path.dirname(self.fname)
         outdir = f'{dirname}/{cakedir}'
         outdir1d = f'{dirname}/{xyedir}'
@@ -243,15 +244,15 @@ class MultiFile():
     def saveMaps(self,dirname):
         for f in self.list:
             f.saveMaps(dirname)
-    def integrateAll(self, basemask = None):
+    def integrateAll(self):
         poniinterp = self.list[0].ponilist.poniinterpolation
         print(f'interpolating ponis in {poniinterp} and integrating')
         for file in self.list:
             match self.list[0].ponilist.poniinterpolation:
-                case '1d': file.interpolatePoni(basemask=basemask)
-                case '2d': file.interpolatePoni2D(basemask=basemask)
+                case '1d': file.interpolatePoni()
+                case '2d': file.interpolatePoni2D()
                 case _: raise ValueError('interpolation dimension must be 1d or 2d')
-    def average1d(self,x0,xend,npoints, basemask:str=None, outdir= 'xye', **kwargs):
+    def average1d(self,x0,xend,npoints,  outsubdir= 'xye', **kwargs):
         self.x = np.linspace(x0,xend,npoints)
         avarray = np.empty(shape=(len(self.x), len(self.list)))
         
@@ -261,14 +262,14 @@ class MultiFile():
             print(f'interpolating ponis in {poniinterpolation} and integrating files')
             for file in self.list:
                 match poniinterpolation:
-                    case '1d': file.interpolatePoni(basemask=basemask, **kwargs)
-                    case '2d': file.interpolatePoni2D(basemask=basemask, **kwargs)
+                    case '1d': file.interpolatePoni( **kwargs)
+                    case '2d': file.interpolatePoni2D( **kwargs)
                     case _: raise ValueError('poniinterpolation must be "1d" or "2d"')
         for i,file in enumerate(self.list):
             gridfunc = interp1d(file.x,file.y, fill_value=np.nan, bounds_error=False)
             avarray[:,i] = gridfunc(self.x)
         self.yav = np.nanmean(avarray,axis=1)
-        outfile = f'{os.path.dirname(self.list[0].fname)}/{outdir}/av1d.xy'
+        outfile = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}/av1d.xy'
         np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
         return self.x,self.yav
     def plotAll1d(self):
@@ -282,7 +283,8 @@ class MultiFile():
         plt.ylabel('intensity')
         plt.show()
     def regrid2d(self,tth0, tthend, tthpoints, chi0=-178, chiend=178, chipoints=354, nstdevs = 3, medianFilter = 4, 
-                 outdir = 'cake', cakemask:str = None):
+                 outsubdir = 'cake', cakemask:str = None):
+        print('regridding and merging cakes')
         tthgrid = np.linspace(tth0,tthend, tthpoints)
         chigrid = np.linspace(chi0,chiend,chipoints)
         mesh = np.empty(shape=(len(chigrid),len(tthgrid),2))
@@ -305,7 +307,7 @@ class MultiFile():
             
         for i in range(ndlist.shape[2]):
             masks[:,:,i] = np.where((ndlist[:,:,i]< median-nstdevs*stdev)|(ndlist[:,:,i]> median+nstdevs*stdev) | (ndlist[:,:,i]<=0) |
-                                    (ndlist[:,:,i] > medianFilter*median), 1, cakemask )
+                                    (ndlist[:,:,i] > medianFilter*median)|(ndlist[:,:,i] < median/medianFilter), 1, cakemask )
         maskeddata = np.where(masks == 1, np.nan, ndlist)
         y2 = np.empty(shape=(tthpoints,maskeddata.shape[2]))
         for i in range(maskeddata.shape[2]):
@@ -316,11 +318,12 @@ class MultiFile():
         self.y = np.nanmean(self.avmasked,axis = 0)
         e = self.y**0.5
         baseoutdir = os.path.dirname(self.list[0].fname)
-        outdir = f'{baseoutdir}/{outdir}'
-        if outdir:
-            os.makedirs(outdir,exist_ok=True)
-            bubbleHeader(f'{outdir}/av2d.edf', np.where(np.isnan(self.avmasked),0,self.avmasked), tthgrid, chigrid,self.y,e)
-            np.savetxt(f'{outdir}/av2d.xy',np.array([self.x,self.y2]).transpose(),fmt='%.6f')
+        outsubdir = f'{baseoutdir}/{outsubdir}'
+        if outsubdir:
+            os.makedirs(outsubdir,exist_ok=True)
+            bubbleHeader(f'{outsubdir}/av2d.edf', np.where(np.isnan(self.avmasked),0,self.avmasked), tthgrid, chigrid,self.y,e)
+            np.savetxt(f'{outsubdir}/av2d.xy',np.array([self.x,self.y2]).transpose(),fmt='%.6f')
+            np.savetxt(f'{outsubdir}/cake2d.xy',np.array([self.x,self.y]).transpose(),fmt='%.6f')
         return self.avmasked
     def saveEDF_noheader(self,dirname):
         '''
