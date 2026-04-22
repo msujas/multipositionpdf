@@ -13,3 +13,48 @@ merged Si cake from data measured in 2 dimensions
 single Si cake
 ![alt text](images/Si_single.png)
 
+
+Usage:
+```Python
+from multipospdf import FilePoni, MultiFile, PoniData,PoniList
+from glob import glob
+import os
+ponidir = 'PathToData'
+datasubdirs = ['s1','s2','s3'] #assuming data in <ponidir>/<subdir>
+maskfile = f'{ponidir}/maskfile.edf'
+cakemask = f'{ponidir}/cakemask.edf' #a mask file in the shape of the outputted merged cake
+ponis = glob(f'{ponidir}*.poni')
+
+def getyz(file): #assuming files are in format: x_dty125.40_dtz135.00_...
+    basefile = os.path.splitext(os.path.basename(file))[0]
+    filesplit = basefile.split('_')
+    ypos = float(filesplit[1].replace('dty',''))
+    zpos = float(filesplit[2].replace('dtz',''))
+    return ypos,zpos
+
+ponilist = []
+for p in ponis:
+    ypos,zpos = getyz(p)
+    ponilist.append(PoniData(p,ypos,zpos))
+ponilist = PoniList(ponilist)
+
+ponilist.plot2d() #plot a grid of interpolated poni values with calculated positions overlayed
+
+def main(datadir):
+    tth0 = 0.75
+    tthend = 58
+    npoints = 5000
+    cbfs = glob(f'{datadir}/*.cbf')
+    fps = []
+    for f in cbfs:
+        y,z = getyz(f)
+        fps.append(FilePoni(f,y,zpos=z, ponilist=ponilist,maskfile=maskfile)) #can use individual masks if necessary
+    filedata = MultiFile(fps)
+    filedata.average1d(tth0,tthend, npoints=npoints)
+    #filedata.saveEDF_noheader(ponidir) #can use this to make a file to load into silx to make a cake mask
+    filedata.regrid2d(tth0,tthend, npoints, cakemask=cakemask)
+    
+for d in datasubdirs:
+    main(f'{ponidir}/{d}')
+```
+
