@@ -175,7 +175,7 @@ class FilePoni():
         self.rot3 = 0
         self.integrate(**kwargs)
 
-    def integrate(self, gainfile = None, xyedir = 'xye', cakedir = 'cake'):
+    def integrate(self, gainfile = None, xyedir = 'xye', cakedir = 'cake', polarization_factor = 0.85):
         self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
 
@@ -195,9 +195,9 @@ class FilePoni():
             gainmap = fabio.open(gainfile).data
             self.array = gainCorrection(self.array,gainmap)
         
-        self.x,self.y,self.e = self.ai.integrate1d(self.array,5000,correctSolidAngle=True, polarization_factor=0.99,method='bbox',
+        self.x,self.y,self.e = self.ai.integrate1d(self.array,5000,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson')
-        self.result2d = self.ai.integrate2d(self.array,5000,360,correctSolidAngle=True, polarization_factor=0.99,method='bbox',
+        self.result2d = self.ai.integrate2d(self.array,5000,360,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson')
         bubbleHeader(outfile, *self.result2d[:3],self.y,self.e)
         np.savetxt(outfile1d, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
@@ -206,13 +206,13 @@ class FilePoni():
         self.chi = self.result2d[2]
         self.integrated= True
         
-    def saveMaps(self,dirname):
+    def saveMaps(self,dirname, polarization_factor):
         self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
         
         self.ttharray:np.ndarray = self.geometry.twoThetaArray()
         self.chiarray:np.ndarray = self.geometry.chiArray()
-        self.pol:np.ndarray = self.geometry.polarization(factor=0.99)
+        self.pol:np.ndarray = self.geometry.polarization(factor=polarization_factor)
         self.sa :np.ndarray = self.geometry.solidAngleArray()
         self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
         self.arrayCorrected = self.array/(self.pol*self.sa)
@@ -253,6 +253,14 @@ class MultiFile():
                 case '2d': file.interpolatePoni2D()
                 case _: raise ValueError('interpolation dimension must be 1d or 2d')
     def average1d(self,x0,xend,npoints,  outsubdir= 'xye', **kwargs):
+        '''
+        run the interpolations (if not done already) and regrid and average all 1d patterns
+        x0 - 2theta0
+        xend - 2theta end
+        npoints - number of points in regrid
+        outsubdir - subdirectory for averaged 1d file
+        kwargs - kwargs for interpolation
+        '''
         self.x = np.linspace(x0,xend,npoints)
         avarray = np.empty(shape=(len(self.x), len(self.list)))
         
@@ -269,7 +277,9 @@ class MultiFile():
             gridfunc = interp1d(file.x,file.y, fill_value=np.nan, bounds_error=False)
             avarray[:,i] = gridfunc(self.x)
         self.yav = np.nanmean(avarray,axis=1)
-        outfile = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}/av1d.xy'
+        outdir = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}'
+        os.makedirs(outdir,exist_ok=True)
+        outfile = f'{outdir}/av1d.xy'
         np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
         return self.x,self.yav
     def plotAll1d(self):

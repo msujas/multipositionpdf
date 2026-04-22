@@ -2,3 +2,6 @@ test.py
 __pycache__
 multipospdf.egg-info
 main.py
+images/C60_1position.png
+images/C60_multiposition.png
+images/pdfCompare.png
