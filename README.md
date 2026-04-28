@@ -51,8 +51,8 @@ def main(datadir):
         fps.append(FilePoni(f,y,zpos=z, ponilist=ponilist,maskfile=maskfile)) #can use individual masks if necessary
     filedata = MultiFile(fps)
     filedata.average1d(tth0,tthend, npoints=npoints)
+    filedata.average2d(cakemask=cakemask)
     #filedata.saveEDF_noheader(ponidir) #can use this to make a file to load into silx to make a cake mask
-    filedata.regrid2d(tth0,tthend, npoints, cakemask=cakemask)
     
 for d in datasubdirs:
     main(f'{ponidir}/{d}')
