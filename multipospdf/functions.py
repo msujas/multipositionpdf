@@ -1,7 +1,7 @@
 import numpy as np
 import pyFAI
 from fabio.edfimage import EdfImage
-from cryio.cbfimage import CbfImage
+from cryio.cbfimage import CbfImage, CbfHeader
 import os, fabio
 from glob import glob
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
@@ -139,6 +139,7 @@ class PoniList():
 class FilePoni():
     def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None):
         self.fname = fname
+        self.flux = CbfHeader(self.fname).header['Flux']
         self.ypos = ypos
         self.zpos = zpos
         self.ponilist = ponilist
@@ -176,7 +177,7 @@ class FilePoni():
         self.integrate(**kwargs)
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = 'xye', 
-                  cakedir = 'cake', polarization_factor = 0.85):
+                  cakedir = 'cake', polarization_factor = 0.85, scale = 10**5):
         self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
 
@@ -203,7 +204,8 @@ class FilePoni():
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
         bubbleHeader(outfile, *self.result2d[:3],self.y,self.e)
         np.savetxt(outfile1d, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
-        self.array2d = self.result2d[0]
+        self.array2d = (self.result2d[0])*scale/self.flux
+        self.y = self.y*scale/self.flux
         self.tth = self.result2d[1]
         self.chi = self.result2d[2]
         self.integrated= True
@@ -298,12 +300,7 @@ class MultiFile():
                 allarrays = np.empty(shape=(*item.array2d.shape,len(self.list)))
             allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
         #allarrays = np.where((allarrays <=0)| (cakemask == 1), np.nan, allarrays)
-        median = np.nanmedian(allarrays,axis=2)
-        stdev = np.nanstd(allarrays,axis= 2)
-        masks = np.zeros(shape = allarrays.shape)
-        for i in range(allarrays.shape[2]):
-            masks[:,:,i] = np.where((allarrays[:,:,i]< median-nstdevs*stdev)|(allarrays[:,:,i]> median+nstdevs*stdev) | (allarrays[:,:,i]<=0) |
-                                    (allarrays[:,:,i] > medianfilter*median)|(allarrays[:,:,i] < median/medianfilter), 1, cakemask)
+        masks = self.getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
         allarrays = np.where(masks == 1, np.nan, allarrays)
         self.avarray = np.nanmean(allarrays,axis=2)
         self.avarray = np.where(np.isnan(self.avarray),0, self.avarray)
@@ -319,6 +316,14 @@ class MultiFile():
         self.ycake2 = np.nanmean(self.ycake2,axis=1)
         bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
         np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
+    def getmasks(self,data:np.ndarray,cakemask = None, nstdevs=3,medianfilter = 4):
+        masks = np.zeros(shape = data.shape)
+        median = np.nanmedian(data,axis=2)
+        stdev = np.nanstd(data,axis= 2)
+        for i in range(data.shape[2]):
+            masks[:,:,i] = np.where((data[:,:,i]< median-nstdevs*stdev)|(data[:,:,i]> median+nstdevs*stdev) | (data[:,:,i]<=0) |
+                                    (data[:,:,i] > medianfilter*median)|(data[:,:,i] < median/medianfilter), 1, cakemask)
+        return masks
 
     def plotAll1d(self):
         plt.figure()
@@ -346,17 +351,13 @@ class MultiFile():
             rgf = RegularGridInterpolator((item.chi,item.tth), interparray, fill_value=np.nan, bounds_error=False)
             newdata = rgf(mesh)
             ndlist[:,:,i] = newdata
-        stdev = np.nanstd(ndlist,axis=2)
-        median = np.nanmedian(ndlist,axis = 2)
-        masks = np.zeros(shape = ndlist.shape)
+
         if cakemask:
             cakemask = fabio.open(cakemask).data
         else:
             cakemask = 0
-            
-        for i in range(ndlist.shape[2]):
-            masks[:,:,i] = np.where((ndlist[:,:,i]< median-nstdevs*stdev)|(ndlist[:,:,i]> median+nstdevs*stdev) | (ndlist[:,:,i]<=0) |
-                                    (ndlist[:,:,i] > medianFilter*median)|(ndlist[:,:,i] < median/medianFilter), 1, cakemask )
+        masks = self.getmasks(ndlist, cakemask, nstdevs=nstdevs,medianfilter=medianFilter)
+
         maskeddata = np.where(masks == 1, np.nan, ndlist)
         y2 = np.empty(shape=(tthpoints,maskeddata.shape[2]))
         for i in range(maskeddata.shape[2]):
