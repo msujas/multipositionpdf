@@ -254,7 +254,7 @@ class MultiFile():
                 case '1d': file.interpolatePoni()
                 case '2d': file.interpolatePoni2D()
                 case _: raise ValueError('interpolation dimension must be 1d or 2d')
-    def average1d(self,x0,xend,npoints,  outsubdir= 'xye', **kwargs):
+    def average1d(self,x0,xend,npoints,  outsubdir= 'xye', fname='', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
         x0 - 2theta0
@@ -284,10 +284,10 @@ class MultiFile():
         self.yav = np.nanmean(avarray,axis=1)
         outdir = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}'
         os.makedirs(outdir,exist_ok=True)
-        outfile = f'{outdir}/av1d.xy'
+        outfile = f'{outdir}/{fname}av1d.xy'
         np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
         return self.x,self.yav
-    def average2d(self,outsubdir='cake', nstdevs=3, medianfilter=4, cakemask=None):
+    def average2d(self,outsubdir='cake',fname='', nstdevs=3, medianfilter=4, cakemask=None):
         print('averaging cakes')
         if cakemask:
             cakemask = fabio.open(cakemask).data
@@ -317,8 +317,8 @@ class MultiFile():
         for i in range(allarrays.shape[2]):
             self.ycake2[:,i] = np.nanmean(allarrays[:,:,i],axis= 0)
         self.ycake2 = np.nanmean(self.ycake2,axis=1)
-        bubbleHeader(f'{outdir}/av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
-        np.savetxt(f'{outdir}/av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
+        bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
+        np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
 
     def plotAll1d(self):
         plt.figure()
