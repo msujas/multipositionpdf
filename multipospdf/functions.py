@@ -186,17 +186,7 @@ class FilePoni():
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
-        dirname = os.path.dirname(self.fname)
 
-        outdir = f'{dirname}/{cakedir}'
-        outdir1d = f'{dirname}/{xyedir}'
-        basename = os.path.basename(self.fname).replace('.cbf','')
-        outfile = f'{outdir}/{basename}.edf'
-        outfile1d = f'{outdir1d}/{basename}.xye'
-        if cakedir:
-            os.makedirs(outdir,exist_ok=True)
-        if xyedir:
-            os.makedirs(outdir1d,exist_ok=True)
 
         if gainfile:
             gainmap = fabio.open(gainfile).data
@@ -207,23 +197,26 @@ class FilePoni():
         self.result2d = self.ai.integrate2d(self.array,tthbins,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
-        if cakedir:
-            bubbleHeader(outfile, *self.result2d[:3],self.y,self.e)
-        if xyedir:
-            np.savetxt(outfile1d, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
+
         self.array2d = (self.result2d[0])*scale/self.flux
         self.y = self.y*scale/self.flux
         self.tth = self.result2d[1]
         self.chi = self.result2d[2]
         self.integrated= True
+        if cakedir:
+            self.saveCake(cakedir=cakedir)
+        if xyedir:
+            self.save1d(xyedir=xyedir)
 
     def saveCake(self,cakedir = 'cake'):
         outdir = f'{self.dirname}/{cakedir}'
+        os.makedirs(outdir,exist_ok=True)
         outfile = f'{outdir}/{self.basename}.edf'
         bubbleHeader(outfile,self.array2d,self.tth,self.chi,self.y,self.e)
     def save1d(self,xyedir = 'xye'):
         outdir = f'{self.dirname}/{xyedir}'
         outfile = f'{outdir}/{outfile}'
+        os.makedirs(outdir,exist_ok=True)
         np.savetxt(outfile, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
         
     def saveMaps(self,dirname, polarization_factor):
@@ -300,10 +293,11 @@ class MultiFile():
             #gridfunc = interp1d(file.x,file.y, fill_value=np.nan, bounds_error=False)
             avarray[:,i] = np.where(file.y <=0, np.nan, file.y)
         self.yav = np.nanmean(avarray,axis=1)
-        outdir = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}'
-        os.makedirs(outdir,exist_ok=True)
-        outfile = f'{outdir}/{fname}av1d.xy'
-        np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
+        if outsubdir:
+            outdir = f'{os.path.dirname(self.list[0].fname)}/{outsubdir}'
+            os.makedirs(outdir,exist_ok=True)
+            outfile = f'{outdir}/{fname}av1d.xy'
+            np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
         return self.x,self.yav
     def average2d(self,outsubdir='cake',fname='', nstdevs=3, medianfilter=4, cakemask=None):
         print('averaging cakes')
@@ -322,16 +316,17 @@ class MultiFile():
         self.avarray = np.where(np.isnan(self.avarray),0, self.avarray)
         self.tth = self.list[0].tth
         self.chi = self.list[0].chi
-        basedir = os.path.dirname(self.list[0].fname)
-        outdir = f'{basedir}/{outsubdir}'
-        os.makedirs(outdir,exist_ok=True)
         self.ycake = np.nanmean(self.avarray,axis=0)
         self.ycake2 = np.empty(shape=(len(self.tth), len(self.list)))
         for i in range(allarrays.shape[2]):
             self.ycake2[:,i] = np.nanmean(allarrays[:,:,i],axis= 0)
         self.ycake2 = np.nanmean(self.ycake2,axis=1)
-        bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
-        np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
+        if outsubdir:
+            basedir = os.path.dirname(self.list[0].fname)
+            outdir = f'{basedir}/{outsubdir}'
+            os.makedirs(outdir,exist_ok=True)
+            bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
+            np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
     def getmasks(self,data:np.ndarray,cakemask = None, nstdevs=3,medianfilter = 4):
         masks = np.zeros(shape = data.shape)
         median = np.nanmedian(data,axis=2)
