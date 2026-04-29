@@ -74,9 +74,9 @@ class PoniList():
         self.detectors = [p.detector for p in self.__list__]
         self.interpolationFunctions()
         allsame = (np.array(self.zpositions) == self.zpositions[0]).all()
-        self.poniinterpolation = 1
+        self.interpolationDimension = 1
         if not None in self.zpositions and not allsame:
-            self.poniinterpolation = 2
+            self.interpolationDimension = 2
             self.interpolationFunctions2d()
     def __setitem__(self, key, value):
         self.__list__[key] = value
@@ -159,24 +159,25 @@ class FilePoni():
         self.ypositions = self.ponilist.ypositions 
         self.zpositions = self.ponilist.zpositions 
         self.maskfile = maskfile
+        match self.ponilist.interpolationDimension:
+            case 1: self.interpolatePoni()
+            case 2: self.interpolatePoni2D()
 
-    def interpolatePoni(self,  **kwargs):
+    def interpolatePoni(self):
         self.poni1 = self.ponilist.poni1int(self.ypos)
         self.poni2 = self.ponilist.poni2int(self.ypos)
         self.dist = self.ponilist.distint(self.ypos)
         self.rot1 = self.ponilist.rot1int(self.ypos)
         self.rot2 = self.ponilist.rot2int(self.ypos)
         self.rot3=0
-        self.integrate(**kwargs)
 
-    def interpolatePoni2D(self, **kwargs):
+    def interpolatePoni2D(self):
         self.poni1 = self.ponilist.poni1int2d(self.ypos,self.zpos)
         self.poni2 = self.ponilist.poni2int2d(self.ypos,self.zpos)
         self.dist = self.ponilist.distint2d(self.ypos,self.zpos)
         self.rot1 = self.ponilist.rot1int2d(self.ypos,self.zpos)
         self.rot2 = self.ponilist.rot2int2d(self.ypos,self.zpos)
         self.rot3 = 0
-        self.integrate(**kwargs)
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = 'xye', 
                   cakedir = 'cake', polarization_factor = 0.85, scale = 10**5):
@@ -257,14 +258,11 @@ class MultiFile():
     def saveMaps(self,dirname):
         for f in self.list:
             f.saveMaps(dirname)
-    def integrateAll(self):
-        poniinterp = self.list[0].ponilist.poniinterpolation
-        print(f'interpolating ponis in {poniinterp}d and integrating')
+    def integrateAll(self,tthmin,tthmax):
+        poniinterp = self.list[0].ponilist.interpolationDimension
+        print(f'integrating with ponis interpolated in {poniinterp}d and integrating')
         for file in self.list:
-            match self.list[0].ponilist.poniinterpolation:
-                case 1: file.interpolatePoni()
-                case 2: file.interpolatePoni2D()
-                case _: raise ValueError('interpolation dimension must be 1d or 2d')
+            file.integrate(tthmin,tthmax)
     def average1d(self,x0,xend,npoints,  outsubdir= 'xye', fname='', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
@@ -274,18 +272,13 @@ class MultiFile():
         outsubdir - subdirectory for averaged 1d file
         kwargs - kwargs for interpolation
         '''
-        
-        
-        
-        poniinterpolation = self.list[0].ponilist.poniinterpolation
+        poniinterpolation = self.list[0].ponilist.interpolationDimension
 
         if not self.list[0].integrated:
             print(f'interpolating ponis in {poniinterpolation}d and integrating files')
+
             for file in self.list:
-                match poniinterpolation:
-                    case 1: file.interpolatePoni(tthmin=x0,ttmax=xend, tthbins=npoints, **kwargs)
-                    case 2: file.interpolatePoni2D(tthmin=x0,tthmax=xend,tthbins=npoints, **kwargs)
-                    case _: raise ValueError('poniinterpolation must be "1d" or "2d"')
+                file.integrate(x0,xend,tthbins=npoints,**kwargs)
         
         self.x = self.list[0].x
         avarray = np.empty(shape=(len(self.x), len(self.list)))
