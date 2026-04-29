@@ -205,8 +205,10 @@ class FilePoni():
         self.result2d = self.ai.integrate2d(self.array,tthbins,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
-        bubbleHeader(outfile, *self.result2d[:3],self.y,self.e)
-        np.savetxt(outfile1d, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
+        if cakedir:
+            bubbleHeader(outfile, *self.result2d[:3],self.y,self.e)
+        if xyedir:
+            np.savetxt(outfile1d, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
         self.array2d = (self.result2d[0])*scale/self.flux
         self.y = self.y*scale/self.flux
         self.tth = self.result2d[1]
