@@ -139,6 +139,8 @@ class PoniList():
 class FilePoni():
     def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None):
         self.fname = fname
+        self.dirname = os.path.dirname(self.fname)
+        self.basename = os.path.splitext(os.path.basename(self.fname))[0]
         self.flux = CbfHeader(self.fname).header['Flux']
         self.ypos = ypos
         self.zpos = zpos
@@ -214,6 +216,15 @@ class FilePoni():
         self.tth = self.result2d[1]
         self.chi = self.result2d[2]
         self.integrated= True
+
+    def saveCake(self,cakedir = 'cake'):
+        outdir = f'{self.dirname}/{cakedir}'
+        outfile = f'{outdir}/{self.basename}.edf'
+        bubbleHeader(outfile,self.array2d,self.tth,self.chi,self.y,self.e)
+    def save1d(self,xyedir = 'xye'):
+        outdir = f'{self.dirname}/{xyedir}'
+        outfile = f'{outdir}/{outfile}'
+        np.savetxt(outfile, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
         
     def saveMaps(self,dirname, polarization_factor):
         self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
@@ -386,3 +397,9 @@ class MultiFile():
         '''
         im = EdfImage(self.avarray)
         im.save(f'{dirname}/av2d_noheader.edf')
+
+    def __getitem__(self, key):
+        return self.list[key]
+    def __contains__(self, item):
+        return item in self.list
+
