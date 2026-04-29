@@ -74,9 +74,9 @@ class PoniList():
         self.detectors = [p.detector for p in self.__list__]
         self.interpolationFunctions()
         allsame = (np.array(self.zpositions) == self.zpositions[0]).all()
-        self.poniinterpolation = '1d'
+        self.poniinterpolation = 1
         if not None in self.zpositions and not allsame:
-            self.poniinterpolation = '2d'
+            self.poniinterpolation = 2
             self.interpolationFunctions2d()
     def __setitem__(self, key, value):
         self.__list__[key] = value
@@ -185,13 +185,16 @@ class FilePoni():
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
         dirname = os.path.dirname(self.fname)
+
         outdir = f'{dirname}/{cakedir}'
         outdir1d = f'{dirname}/{xyedir}'
         basename = os.path.basename(self.fname).replace('.cbf','')
         outfile = f'{outdir}/{basename}.edf'
         outfile1d = f'{outdir1d}/{basename}.xye'
-        os.makedirs(outdir,exist_ok=True)
-        os.makedirs(outdir1d,exist_ok=True)
+        if cakedir:
+            os.makedirs(outdir,exist_ok=True)
+        if xyedir:
+            os.makedirs(outdir1d,exist_ok=True)
 
         if gainfile:
             gainmap = fabio.open(gainfile).data
@@ -250,11 +253,11 @@ class MultiFile():
             f.saveMaps(dirname)
     def integrateAll(self):
         poniinterp = self.list[0].ponilist.poniinterpolation
-        print(f'interpolating ponis in {poniinterp} and integrating')
+        print(f'interpolating ponis in {poniinterp}d and integrating')
         for file in self.list:
             match self.list[0].ponilist.poniinterpolation:
-                case '1d': file.interpolatePoni()
-                case '2d': file.interpolatePoni2D()
+                case 1: file.interpolatePoni()
+                case 2: file.interpolatePoni2D()
                 case _: raise ValueError('interpolation dimension must be 1d or 2d')
     def average1d(self,x0,xend,npoints,  outsubdir= 'xye', fname='', **kwargs):
         '''
@@ -271,11 +274,11 @@ class MultiFile():
         poniinterpolation = self.list[0].ponilist.poniinterpolation
 
         if not self.list[0].integrated:
-            print(f'interpolating ponis in {poniinterpolation} and integrating files')
+            print(f'interpolating ponis in {poniinterpolation}d and integrating files')
             for file in self.list:
                 match poniinterpolation:
-                    case '1d': file.interpolatePoni(tthmin=x0,ttmax=xend, tthbins=npoints, **kwargs)
-                    case '2d': file.interpolatePoni2D(tthmin=x0,tthmax=xend,tthbins=npoints, **kwargs)
+                    case 1: file.interpolatePoni(tthmin=x0,ttmax=xend, tthbins=npoints, **kwargs)
+                    case 2: file.interpolatePoni2D(tthmin=x0,tthmax=xend,tthbins=npoints, **kwargs)
                     case _: raise ValueError('poniinterpolation must be "1d" or "2d"')
         
         self.x = self.list[0].x
