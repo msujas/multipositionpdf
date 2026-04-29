@@ -215,7 +215,7 @@ class FilePoni():
         bubbleHeader(outfile,self.array2d,self.tth,self.chi,self.y,self.e)
     def save1d(self,xyedir = 'xye'):
         outdir = f'{self.dirname}/{xyedir}'
-        outfile = f'{outdir}/{outfile}'
+        outfile = f'{self.dirname}/{self.basename}.xye'
         os.makedirs(outdir,exist_ok=True)
         np.savetxt(outfile, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
         
