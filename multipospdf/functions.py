@@ -149,8 +149,9 @@ class FilePoni():
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
         self.array = CbfImage(fname).array
-        
+
         self.integrated = False
+        self.mapscalculated = False
         self.poni1s = self.ponilist.poni1s 
         self.poni2s = self.ponilist.poni2s 
         self.dists = self.ponilist.distances 
@@ -162,7 +163,8 @@ class FilePoni():
         match self.ponilist.interpolationDimension:
             case 1: self.interpolatePoni()
             case 2: self.interpolatePoni2D()
-
+        self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
+                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
     def interpolatePoni(self):
         self.poni1 = self.ponilist.poni1int(self.ypos)
         self.poni2 = self.ponilist.poni2int(self.ypos)
@@ -192,10 +194,15 @@ class FilePoni():
         if gainfile:
             gainmap = fabio.open(gainfile).data
             self.array = gainCorrection(self.array,gainmap)
-        
-        self.x,self.y,self.e = self.ai.integrate1d(self.array,tthbins,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
+
+        correctSolidAngle = False
+
+        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
+        self.array = (self.array/self.absSolidAngle)*1e-6
+
+        self.x,self.y,self.e = self.ai.integrate1d(self.array,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
-        self.result2d = self.ai.integrate2d(self.array,tthbins,correctSolidAngle=True, polarization_factor=polarization_factor,method='bbox',
+        self.result2d = self.ai.integrate2d(self.array,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
 
@@ -219,23 +226,31 @@ class FilePoni():
         outfile = f'{self.dirname}/{self.basename}.xye'
         os.makedirs(outdir,exist_ok=True)
         np.savetxt(outfile, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
-        
-    def saveMaps(self,dirname, polarization_factor):
-        self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
-                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
-        
+
+    def getMaps(self, polarization_factor):
+
         self.ttharray:np.ndarray = self.geometry.twoThetaArray()
         self.chiarray:np.ndarray = self.geometry.chiArray()
         self.pol:np.ndarray = self.geometry.polarization(factor=polarization_factor)
         self.sa :np.ndarray = self.geometry.solidAngleArray()
+        dety,detx,_ = self.geometry.detector.calc_cartesian_positions()
+        ponidist = ((dety-self.poni1)**2 + (detx - self.poni2)**2)**0.5
+        self.sampledist = (ponidist**2 + self.dist**2)**0.5
         self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
         self.arrayCorrected = self.array/(self.pol*self.sa)
+        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
+        self.mapscalculated = True
+
+    def saveMaps(self,dirname, polarization_factor):
+        if not self.mapscalculated:
+            self.getMaps(polarization_factor)
         basename = os.path.splitext(os.path.basename(self.fname))[0]
         basename += '.edf'
         os.makedirs(f'{dirname}/tth',exist_ok=True)
         os.makedirs(f'{dirname}/sa',exist_ok=True)
         os.makedirs(f'{dirname}/pol',exist_ok=True)
         os.makedirs(f'{dirname}/chi',exist_ok=True)
+        os.makedirs(f'{dirname}/sampleDist',exist_ok=True)
         im = EdfImage(self.ttharray)
         im.save(f'{dirname}/tth/{basename}')
         im = EdfImage(self.chiarray)
@@ -244,6 +259,9 @@ class FilePoni():
         im.save(f'{dirname}/pol/{basename}')
         im=EdfImage(self.sa)
         im.save(f'{dirname}/sa/{basename}')
+        im = EdfImage(self.sampledist)
+        im.save(f'{dirname}/sampleDist/{basename}')
+
 
     def arrayBins(self,tthbins:int, chibins:int, tthmax:float):
         tthmax = tthmax*np.pi/180
@@ -320,7 +338,7 @@ class MultiFile():
             os.makedirs(outdir,exist_ok=True)
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
-    def getmasks(self,data:np.ndarray,cakemask = None, nstdevs=3,medianfilter = 4):
+    def getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         masks = np.zeros(shape = data.shape)
         median = np.nanmedian(data,axis=2)
         stdev = np.nanstd(data,axis= 2)
