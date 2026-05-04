@@ -27,7 +27,7 @@ def gainCorrection(avim,gainArray):
     avimGain = np.where(gainArray <0, -1, avimGain)
     return avimGain
 
-class PoniData():
+class PoniYZ():
     def __init__(self, poni:AzimuthalIntegrator, ypos:float, zpos:float = None):
         if isinstance(poni,AzimuthalIntegrator):
             self.poni:AzimuthalIntegrator = poni
@@ -47,12 +47,12 @@ class PoniData():
         self.detector = self.poni.detector
 
 class PoniList():
-    def __init__(self, alist:list[PoniData] = None):
-        self.__list__ : list[PoniData] = []
+    def __init__(self, alist:list[PoniYZ] = None):
+        self.__list__ : list[PoniYZ] = []
         if alist:
             self.__list__ = alist
             self.getValues()
-    def __getitem__(self, key) -> PoniData :
+    def __getitem__(self, key) -> PoniYZ :
         return self.__list__[key]
     def __contains__(self, item):
         return item in self.__list__
@@ -136,7 +136,7 @@ class PoniList():
         plt.show()
 
         
-class FilePoni():
+class ImagePoni():
     def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None):
         self.fname = fname
         self.dirname = os.path.dirname(self.fname)
@@ -190,19 +190,19 @@ class FilePoni():
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
 
-
+        correctedarray = self.array.copy()
         if gainfile:
             gainmap = fabio.open(gainfile).data
-            self.array = gainCorrection(self.array,gainmap)
+            correctedarray = gainCorrection(correctedarray,gainmap)
 
         correctSolidAngle = False
 
-        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
-        self.array = (self.array/self.absSolidAngle)*1e-6
+        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True) #have to correct with absolute solid angle, as it can change image to image
+        correctedarray = (correctedarray/self.absSolidAngle)*1e-6
 
-        self.x,self.y,self.e = self.ai.integrate1d(self.array,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
+        self.x,self.y,self.e = self.ai.integrate1d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
-        self.result2d = self.ai.integrate2d(self.array,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
+        self.result2d = self.ai.integrate2d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
 
@@ -271,7 +271,7 @@ class FilePoni():
         return self.combinedbinarray
 
 class MultiFile():
-    def __init__(self,alist:list[FilePoni]):
+    def __init__(self,alist:list[ImagePoni]):
         self.list = alist
     def saveMaps(self,dirname):
         for f in self.list:

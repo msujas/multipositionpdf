@@ -1,8 +1,8 @@
 A library for processing total-scattering data with multiple detector positions on BM31.
 
-Usage: Must make ponis for a handful of calibration images (5 or so, must include corner positions). These are loaded together with detector y (and optional z) positions into the PoniData class. The ponis for the rest of the positions are then interpolated in 1 or 2 dimensions with the PoniList class. CBF files are loaded into the FilePoni class together with their detector y (and z) positions, and the PoniList, and a interpolated poni is calculated for it, then it is integrated.
+Usage: Must make ponis for a handful of calibration images (5 or so, must include corner positions). These are loaded together with detector y (and optional z) positions into the PoniYZ class. The ponis for the rest of the positions are then interpolated in 1 or 2 dimensions with the PoniList class. CBF files are loaded into the ImagePoni class together with their detector y (and z) positions, and the PoniList, and a interpolated poni is calculated for it, then it is integrated.
 
-The MultiFile class then takes a list of all the FilePoni objects. It averages and merges all the cake arrays, filtering cosmics and outliers, saves a merged cake file, and 1D merged patterns.
+The MultiFile class then takes a list of all the ImagePoni objects. It averages and merges all the cake arrays, filtering cosmics and outliers, saves a merged cake file, and 1D merged patterns.
 
 2D interpolation of ponis
 ![alt text](images/2dinterpolations.png)
@@ -16,7 +16,7 @@ single Si cake
 
 ## Usage:
 ```Python
-from multipospdf import FilePoni, MultiFile, PoniData,PoniList
+from multipospdf import ImagePoni, MultiFile, PoniYZ,PoniList
 from glob import glob
 import os
 ponidir = 'PathToData'
@@ -35,7 +35,7 @@ def getyz(file): #assuming files are in format: x_dty125.40_dtz135.00_...
 ponilist = []
 for p in ponis:
     ypos,zpos = getyz(p)
-    ponilist.append(PoniData(p,ypos,zpos))
+    ponilist.append(PoniYZ(p,ypos,zpos))
 ponilist = PoniList(ponilist)
 
 ponilist.plot2d() #plot a grid of interpolated poni values with calculated positions overlayed
@@ -48,7 +48,7 @@ def main(datadir,fname=''):
     fps = []
     for f in cbfs:
         y,z = getyz(f)
-        fps.append(FilePoni(f,y,zpos=z, ponilist=ponilist,maskfile=maskfile)) #can use individual masks if necessary
+        fps.append(ImagePoni(f,y,zpos=z, ponilist=ponilist,maskfile=maskfile)) #can use individual masks if necessary
     filedata = MultiFile(fps)
     filedata.average1d(tth0,tthend, npoints=npoints,polarization_factor = 0.85,fname=fname)
     filedata.average2d(cakemask=cakemask,fname=fname)
