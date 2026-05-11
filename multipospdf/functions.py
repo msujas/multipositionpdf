@@ -141,7 +141,10 @@ class ImagePoni():
         self.fname = fname
         self.dirname = os.path.dirname(self.fname)
         self.basename = os.path.splitext(os.path.basename(self.fname))[0]
-        self.flux = CbfHeader(self.fname).header['Flux']
+        header = CbfHeader(self.fname).header
+        self.flux = header['Flux']
+        exptime = header['Exposure_time']
+        self.fluxrate = self.flux/exptime
         self.ypos = ypos
         self.zpos = zpos
         self.ponilist = ponilist
@@ -229,7 +232,7 @@ class ImagePoni():
 
     def getMaps(self, polarization_factor):
 
-        self.ttharray:np.ndarray = self.geometry.twoThetaArray()
+        self.ttharray:np.ndarray = self.geometry.twoThetaArray()*180/np.pi
         self.chiarray:np.ndarray = self.geometry.chiArray()
         self.pol:np.ndarray = self.geometry.polarization(factor=polarization_factor)
         self.sa :np.ndarray = self.geometry.solidAngleArray()
@@ -237,9 +240,11 @@ class ImagePoni():
         ponidist = ((dety-self.poni1)**2 + (detx - self.poni2)**2)**0.5
         self.sampledist = (ponidist**2 + self.dist**2)**0.5
         self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
-        self.arrayCorrected = self.array/(self.pol*self.sa)
+        
         self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
         self.mapscalculated = True
+        self.arrayCorrected = self.array/(self.pol*self.absSolidAngle*10**6)
+        
 
     def saveMaps(self,dirname, polarization_factor):
         if not self.mapscalculated:
@@ -272,16 +277,17 @@ class ImagePoni():
 
 class MultiFile():
     def __init__(self,alist:list[ImagePoni]):
-        self.list = alist
+        self.list = []
+        for i in alist:
+            if i.fluxrate > 500:
+                self.list.append(i)
+            else:
+                print(f'image {i.fname} did not have enough flux, ignoring')
     def saveMaps(self,dirname):
         for f in self.list:
             f.saveMaps(dirname)
-    def integrateAll(self,tthmin,tthmax):
-        poniinterp = self.list[0].ponilist.interpolationDimension
-        print(f'integrating with ponis interpolated in {poniinterp}d and integrating')
-        for file in self.list:
-            file.integrate(tthmin,tthmax)
-    def average1d(self,x0,xend,npoints,  outsubdir= 'xye', fname='', **kwargs):
+        
+    def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354, polarization_factor= 0.85,  outsubdir= 'xye', fname='', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
         x0 - 2theta0
@@ -292,11 +298,12 @@ class MultiFile():
         '''
         poniinterpolation = self.list[0].ponilist.interpolationDimension
 
-        if not self.list[0].integrated:
-            print(f'interpolating ponis in {poniinterpolation}d and integrating files')
 
-            for file in self.list:
-                file.integrate(x0,xend,tthbins=npoints,**kwargs)
+        print(f'integrating images')
+
+        for file in self.list:
+            file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins, polarization_factor=polarization_factor,**kwargs)
+        self.polarization_factor=polarization_factor
         
         self.x = self.list[0].x
         avarray = np.empty(shape=(len(self.x), len(self.list)))
@@ -338,6 +345,7 @@ class MultiFile():
             os.makedirs(outdir,exist_ok=True)
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
+            np.savetxt(f'{outdir}/{fname}av2d_cake.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
     def getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         masks = np.zeros(shape = data.shape)
         median = np.nanmedian(data,axis=2)
@@ -404,8 +412,12 @@ class MultiFile():
         im = EdfImage(self.avarray)
         im.save(f'{dirname}/av2d_noheader.edf')
 
+                    
+       
     def __getitem__(self, key):
         return self.list[key]
     def __contains__(self, item):
         return item in self.list
+    def __iter__(self):
+        iter(self.list)
 
