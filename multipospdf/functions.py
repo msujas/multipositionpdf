@@ -277,7 +277,7 @@ class ImagePoni():
 
 class MultiFile():
     def __init__(self,alist:list[ImagePoni]):
-        self.list = []
+        self.list:list[ImagePoni] = []
         for i in alist:
             if i.fluxrate > 500:
                 self.list.append(i)
@@ -359,52 +359,13 @@ class MultiFile():
         plt.figure()
         for file in self.list:
             label = os.path.basename(file.fname)
-            plt.plot(file.x,file.y,label = label)
+            plt.plot(file.tth ,file.y,label = label)
         plt.plot(self.x,self.yav,label = 'average', linewidth = 3)
         plt.legend()
         plt.xlabel('2theta (°)')
         plt.ylabel('intensity')
         plt.show()
 
-    def regrid2d(self,tth0, tthend, tthpoints, chi0=-178, chiend=178, chipoints=354, nstdevs = 3, medianFilter = 4, 
-                 outsubdir = 'cake', cakemask:str = None):
-        print('regridding and merging cakes')
-        tthgrid = np.linspace(tth0,tthend, tthpoints)
-        chigrid = np.linspace(chi0,chiend,chipoints)
-        mesh = np.empty(shape=(len(chigrid),len(tthgrid),2))
-        for i in range(len(chigrid)):
-            for j in range(len(tthgrid)):
-                mesh[i,j] = [chigrid[i],tthgrid[j]]
-        ndlist = np.empty(shape = (*mesh.shape[:2],len(self.list)))
-        for i,item in enumerate(self.list):
-            interparray = np.where(item.array2d<=0, np.nan, item.array2d)
-            rgf = RegularGridInterpolator((item.chi,item.tth), interparray, fill_value=np.nan, bounds_error=False)
-            newdata = rgf(mesh)
-            ndlist[:,:,i] = newdata
-
-        if cakemask:
-            cakemask = fabio.open(cakemask).data
-        else:
-            cakemask = 0
-        masks = self.getmasks(ndlist, cakemask, nstdevs=nstdevs,medianfilter=medianFilter)
-
-        maskeddata = np.where(masks == 1, np.nan, ndlist)
-        y2 = np.empty(shape=(tthpoints,maskeddata.shape[2]))
-        for i in range(maskeddata.shape[2]):
-            y2[:,i] = np.nanmean(maskeddata[:,:,i],axis = 0)
-        self.y2 = np.nanmean(y2,axis=1)
-        self.avarray = np.nanmean(maskeddata,axis= 2)
-        self.x = tthgrid
-        self.y = np.nanmean(self.avarray,axis = 0)
-        e = self.y**0.5
-        baseoutdir = os.path.dirname(self.list[0].fname)
-        outsubdir = f'{baseoutdir}/{outsubdir}'
-        if outsubdir:
-            os.makedirs(outsubdir,exist_ok=True)
-            bubbleHeader(f'{outsubdir}/av2d.edf', np.where(np.isnan(self.avarray),0,self.avarray), tthgrid, chigrid,self.y,e)
-            np.savetxt(f'{outsubdir}/av2d.xy',np.array([self.x,self.y2]).transpose(),fmt='%.6f')
-            np.savetxt(f'{outsubdir}/cake2d.xy',np.array([self.x,self.y]).transpose(),fmt='%.6f')
-        return self.avarray
     def saveEDF_noheader(self,dirname):
         '''
         so files can be read with silx/pyfai to make masks
@@ -412,8 +373,6 @@ class MultiFile():
         im = EdfImage(self.avarray)
         im.save(f'{dirname}/av2d_noheader.edf')
 
-                    
-       
     def __getitem__(self, key):
         return self.list[key]
     def __contains__(self, item):
