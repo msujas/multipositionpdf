@@ -296,11 +296,7 @@ class MultiFile():
         outsubdir - subdirectory for averaged 1d file
         kwargs - kwargs for interpolation
         '''
-        poniinterpolation = self.list[0].ponilist.interpolationDimension
-
-
         print(f'integrating images')
-
         for file in self.list:
             file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins, polarization_factor=polarization_factor,**kwargs)
         self.polarization_factor=polarization_factor
@@ -308,7 +304,6 @@ class MultiFile():
         self.x = self.list[0].x
         avarray = np.empty(shape=(len(self.x), len(self.list)))
         for i,file in enumerate(self.list):
-            #gridfunc = interp1d(file.x,file.y, fill_value=np.nan, bounds_error=False)
             avarray[:,i] = np.where(file.y <=0, np.nan, file.y)
         self.yav = np.nanmean(avarray,axis=1)
         if outsubdir:
@@ -327,14 +322,13 @@ class MultiFile():
             if i == 0:
                 allarrays = np.empty(shape=(*item.array2d.shape,len(self.list)))
             allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
-        #allarrays = np.where((allarrays <=0)| (cakemask == 1), np.nan, allarrays)
         masks = self.getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
         allarrays = np.where(masks == 1, np.nan, allarrays)
         self.avarray = np.nanmean(allarrays,axis=2)
+        self.ycake = np.nanmean(self.avarray,axis=0)
         self.avarray = np.where(np.isnan(self.avarray),0, self.avarray)
         self.tth = self.list[0].tth
         self.chi = self.list[0].chi
-        self.ycake = np.nanmean(self.avarray,axis=0)
         self.ycake2 = np.empty(shape=(len(self.tth), len(self.list)))
         for i in range(allarrays.shape[2]):
             self.ycake2[:,i] = np.nanmean(allarrays[:,:,i],axis= 0)
@@ -345,7 +339,7 @@ class MultiFile():
             os.makedirs(outdir,exist_ok=True)
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
-            np.savetxt(f'{outdir}/{fname}av2d_cake.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
+            #np.savetxt(f'{outdir}/{fname}av2d_cake.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
     def getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         masks = np.zeros(shape = data.shape)
         median = np.nanmedian(data,axis=2)
