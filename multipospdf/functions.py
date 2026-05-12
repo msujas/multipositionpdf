@@ -49,6 +49,8 @@ class PoniYZ():
 class PoniList():
     def __init__(self, alist:list[PoniYZ] = None):
         self.__list__ : list[PoniYZ] = []
+        if not all(isinstance(a, PoniYZ) for a in alist):
+            raise ValueError('all input list values must be PoniYZ type')
         if alist:
             self.__list__ = alist
             self.getValues()
@@ -59,6 +61,8 @@ class PoniList():
     def __iter__(self):
         return iter(self.__list__)
     def append(self,item):
+        if not isinstance(item,PoniYZ):
+            raise ValueError('can only append PoniYZ values')
         self.__list__.append(item)
         self.getValues()
     def getValues(self):
@@ -279,10 +283,15 @@ class MultiFile():
     def __init__(self,alist:list[ImagePoni]):
         self.list:list[ImagePoni] = []
         for i in alist:
-            if i.fluxrate > 500:
-                self.list.append(i)
-            else:
+            if not isinstance(i, ImagePoni):
+                raise ValueError('input list must contain only ImagePoni values')
+            if i.fluxrate < 100:
                 print(f'image {i.fname} did not have enough flux, ignoring')
+            elif not i.poni1:
+                print(f'no valid poni for {i.fname}')
+            else:
+                self.list.append(i)
+                
     def saveMaps(self,dirname):
         for f in self.list:
             f.saveMaps(dirname)
@@ -322,7 +331,7 @@ class MultiFile():
             if i == 0:
                 allarrays = np.empty(shape=(*item.array2d.shape,len(self.list)))
             allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
-        masks = self.getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
+        masks = self._getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
         allarrays = np.where(masks == 1, np.nan, allarrays)
         self.avarray = np.nanmean(allarrays,axis=2)
         self.ycake = np.nanmean(self.avarray,axis=0)
@@ -340,7 +349,10 @@ class MultiFile():
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
             #np.savetxt(f'{outdir}/{fname}av2d_cake.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
-    def getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
+    def _getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
+        '''
+        for applying cosmic masking and mask for final cake
+        '''
         masks = np.zeros(shape = data.shape)
         median = np.nanmedian(data,axis=2)
         stdev = np.nanstd(data,axis= 2)
@@ -372,5 +384,5 @@ class MultiFile():
     def __contains__(self, item):
         return item in self.list
     def __iter__(self):
-        iter(self.list)
+        return iter(self.list)
 

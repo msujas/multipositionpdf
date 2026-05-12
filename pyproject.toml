@@ -18,5 +18,5 @@ classifiers = [
 [tool.setuptools]
 packages = ["multipospdf"]
 
-#[project.urls]
-#repository = "https://github.com/msujas/pdfgetx3_gui.git"
+[project.urls]
+repository = "https://github.com/msujas/multipositionpdf"

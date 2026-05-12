@@ -28,8 +28,10 @@ ponis = glob(f'{ponidir}*.poni')
 def getyz(file): #assuming files are in format: x_dty125.40_dtz135.00_...
     basefile = os.path.splitext(os.path.basename(file))[0]
     filesplit = basefile.split('_')
-    ypos = float(filesplit[1].replace('dty',''))
-    zpos = float(filesplit[2].replace('dtz',''))
+    ypart = [f for f in filesplit if 'dty' in f][0]
+    zpart = [f for f in filesplit if 'dtz' in f][0]
+    ypos = float(ypart.replace('dty',''))
+    zpos = float(zpart.replace('dtz',''))
     return ypos,zpos
 
 ponilist = []
