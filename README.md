@@ -34,18 +34,20 @@ def getyz(file): #assuming files are in format: x_dty125.40_dtz135.00_...
     zpos = float(zpart.replace('dtz',''))
     return ypos,zpos
 
-ponilist = []
-for p in ponis:
-    ypos,zpos = getyz(p)
-    ponilist.append(PoniYZ(p,ypos,zpos))
-ponilist = PoniList(ponilist)
-
-ponilist.plot2d() #plot a grid of interpolated poni values with calculated positions overlayed
+def getponis(ponidir):
+    ponilist = []
+    ponis = glob(f'{ponidir}/*.poni')
+    for p in ponis:
+        ypos,zpos = getyz(p)
+        ponilist.append(PoniYZ(p,ypos=ypos,zpos=zpos))
+    return PoniList(ponilist)
 
 def main(datadir,fname=''):
     tth0 = 0.75
     tthend = 58
     npoints = 5000
+    ponilist = getponis(ponidir)
+    #ponilist.plot2d() #plot a grid of interpolated poni values with calculated positions overlayed
     cbfs = glob(f'{datadir}/*.cbf')
     fps = []
     for f in cbfs:

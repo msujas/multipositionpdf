@@ -6,7 +6,7 @@ import os, fabio
 from glob import glob
 from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 import matplotlib.pyplot as plt
-from scipy.interpolate import interp1d, RegularGridInterpolator, LinearNDInterpolator
+from scipy.interpolate import interp1d, LinearNDInterpolator
 from pyFAI.geometry import Geometry
 
 
@@ -172,6 +172,8 @@ class ImagePoni():
             case 2: self.interpolatePoni2D()
         self.geometry = Geometry(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
                                       rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
+        self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
+                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
     def interpolatePoni(self):
         self.poni1 = self.ponilist.poni1int(self.ypos)
         self.poni2 = self.ponilist.poni2int(self.ypos)
@@ -190,8 +192,7 @@ class ImagePoni():
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = 'xye', 
                   cakedir = 'cake', polarization_factor = 0.85, scale = 10**5):
-        self.ai = AzimuthalIntegrator(dist=self.dist, poni1=self.poni1, poni2=self.poni2, rot1=self.rot1,
-                                      rot2=self.rot2, rot3=self.rot3, detector=self.detector,wavelength=self.wavelength)
+
 
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
@@ -278,6 +279,10 @@ class ImagePoni():
         self.chibinarray = (self.sinchi2*chibins).astype(int)
         self.combinedbinarray = self.tthbinarray+1j*self.chibinarray
         return self.combinedbinarray
+    def saveponi(self, filename):
+        dirname = os.path.dirname(filename)
+        os.makedirs(dirname, exist_ok=True)
+        self.ai.save(filename)
 
 class MultiFile():
     def __init__(self,alist:list[ImagePoni]):
@@ -378,6 +383,11 @@ class MultiFile():
         '''
         im = EdfImage(self.avarray)
         im.save(f'{dirname}/av2d_noheader.edf')
+    def saveAllPonis(self,subdir = 'poni'):
+        for item in self.list:
+            basename = os.path.splitext(os.path.basename(item.fname))[0]
+            dirname = os.path.dirname(item.fname)
+            item.saveponi(f'{dirname}/{subdir}/{basename}.poni')
 
     def __getitem__(self, key):
         return self.list[key]
