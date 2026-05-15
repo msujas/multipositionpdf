@@ -167,6 +167,7 @@ class ImagePoni():
         self.ypositions = self.ponilist.ypositions 
         self.zpositions = self.ponilist.zpositions 
         self.maskfile = maskfile
+        self.solidanglescale = 10**6
         match self.ponilist.interpolationDimension:
             case 1: self.interpolatePoni()
             case 2: self.interpolatePoni2D()
@@ -193,7 +194,7 @@ class ImagePoni():
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = 'xye', 
                   cakedir = 'cake', polarization_factor = 0.85, scale = 10**5):
 
-
+        
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
@@ -206,7 +207,8 @@ class ImagePoni():
         correctSolidAngle = False
 
         self.absSolidAngle = self.geometry.solidAngleArray(absolute=True) #have to correct with absolute solid angle, as it can change image to image
-        correctedarray = (correctedarray/self.absSolidAngle)*1e-6
+        correctedarray = (correctedarray/(self.absSolidAngle*self.solidanglescale))
+        correctedarray = correctedarray*scale/self.flux
 
         self.x,self.y,self.e = self.ai.integrate1d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
                                             unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
@@ -214,8 +216,7 @@ class ImagePoni():
                                             unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
 
-        self.array2d = (self.result2d[0])*scale/self.flux
-        self.y = self.y*scale/self.flux
+        self.array2d = self.result2d[0]
         self.tth = self.result2d[1]
         self.chi = self.result2d[2]
         self.integrated= True
@@ -248,7 +249,7 @@ class ImagePoni():
         
         self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
         self.mapscalculated = True
-        self.arrayCorrected = self.array/(self.pol*self.absSolidAngle*10**6)
+        self.arrayCorrected = self.array/(self.pol*self.absSolidAngle*self.solidanglescale)
         
 
     def saveMaps(self,dirname, polarization_factor):
@@ -283,6 +284,7 @@ class ImagePoni():
         dirname = os.path.dirname(filename)
         os.makedirs(dirname, exist_ok=True)
         self.ai.save(filename)
+        self.ponifile = filename
 
 class MultiFile():
     def __init__(self,alist:list[ImagePoni]):
