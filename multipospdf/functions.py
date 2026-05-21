@@ -191,8 +191,8 @@ class ImagePoni():
         self.rot2 = self.ponilist.rot2int2d(self.ypos,self.zpos)
         self.rot3 = 0
 
-    def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = 'xye', 
-                  cakedir = 'cake', polarization_factor = 0.85, scale = 10**5):
+    def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = None, 
+                  cakedir = None, polarization_factor = 0.85, scale = 10**5):
 
         
         mask = np.where(self.array < 0,1,0)
@@ -303,7 +303,8 @@ class MultiFile():
         for f in self.list:
             f.saveMaps(dirname)
         
-    def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354, polarization_factor= 0.85,  outsubdir= 'xye', fname='', **kwargs):
+    def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354, polarization_factor= 0.85,  outsubdir= 'xye', 
+                  fname='', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
         x0 - 2theta0
@@ -314,6 +315,7 @@ class MultiFile():
         '''
         print(f'integrating images')
         for file in self.list:
+            print(file.fname)
             file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins, polarization_factor=polarization_factor,**kwargs)
         self.polarization_factor=polarization_factor
         
