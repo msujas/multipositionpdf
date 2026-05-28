@@ -8,6 +8,7 @@ from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, LinearNDInterpolator
 from pyFAI.geometry import Geometry
+from typing import Literal
 try:
     from fluoCorrectionPilatus import fluoSub_integrated_base, getpolcakebase, FluosubCake
 except ImportError:
@@ -198,7 +199,7 @@ class ImagePoni():
         self.rot3 = 0
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = None, 
-                  cakedir = None,  scale = 10**5):
+                  cakedir = None,  scale = 10**5, unit:Literal["2th_deg", "q_A^-1"] = '2th_deg'):
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
@@ -215,9 +216,9 @@ class ImagePoni():
         correctedarray = correctedarray*scale/self.flux
 
         self.x,self.y,self.e = self.ai.integrate1d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=self.pfactor,
-                                                   method='bbox',unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
+                                                   method='bbox',unit=unit, mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
         self.result2d = self.ai.integrate2d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=self.pfactor,
-                                            method='bbox',unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
+                                            method='bbox',unit=unit, mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
 
         self.array2d = self.result2d[0]
@@ -310,7 +311,7 @@ class MultiFile():
             f.saveMaps(dirname)
         
     def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354,   outsubdir= 'xye', 
-                  fname='', **kwargs):
+                  fname='', unit:Literal["2th_deg","q_A^-1"] = '2th_deg', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
         x0 - 2theta0
@@ -322,7 +323,7 @@ class MultiFile():
         print(f'integrating images')
         for file in self.list:
             print(file.fname)
-            file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins,**kwargs)
+            file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins, unit = unit,**kwargs)
         
         self.pfactor = file.pfactor
         self.x = self.list[0].x
