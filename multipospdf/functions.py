@@ -8,6 +8,11 @@ from pyFAI.integrator.azimuthal import AzimuthalIntegrator
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, LinearNDInterpolator
 from pyFAI.geometry import Geometry
+try:
+    from fluoCorrectionPilatus import fluoSub_integrated_base, getpolcakebase, FluosubCake
+except ImportError:
+    print("couldn't import fluo correction library. Fluo correction not available. Try installing it if needed")
+
 
 
 def bubbleHeader(file2d,array2d, tth, eta, y, e):
@@ -141,7 +146,7 @@ class PoniList():
 
         
 class ImagePoni():
-    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None):
+    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None, pfactor=0.85):
         self.fname = fname
         self.dirname = os.path.dirname(self.fname)
         self.basename = os.path.splitext(os.path.basename(self.fname))[0]
@@ -156,6 +161,7 @@ class ImagePoni():
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
         self.array = CbfImage(fname).array
+        self.pfactor = 0.85 
 
         self.integrated = False
         self.mapscalculated = False
@@ -192,9 +198,7 @@ class ImagePoni():
         self.rot3 = 0
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = None, 
-                  cakedir = None, polarization_factor = 0.85, scale = 10**5):
-
-        
+                  cakedir = None,  scale = 10**5):
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
@@ -206,14 +210,14 @@ class ImagePoni():
 
         correctSolidAngle = False
 
-        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True) #have to correct with absolute solid angle, as it can change image to image
-        correctedarray = (correctedarray/(self.absSolidAngle*self.solidanglescale))
+        self.absSolidAnglemap = self.geometry.solidAngleArray(absolute=True) #have to correct with absolute solid angle, as it can change image to image
+        correctedarray = (correctedarray/(self.absSolidAnglemap*self.solidanglescale))
         correctedarray = correctedarray*scale/self.flux
 
-        self.x,self.y,self.e = self.ai.integrate1d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
-                                            unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
-        self.result2d = self.ai.integrate2d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=polarization_factor,method='bbox',
-                                            unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
+        self.x,self.y,self.e = self.ai.integrate1d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=self.pfactor,
+                                                   method='bbox',unit='2th_deg', mask=mask, error_model='poisson', radial_range=(tthmin,tthmax))
+        self.result2d = self.ai.integrate2d(correctedarray,tthbins,correctSolidAngle=correctSolidAngle, polarization_factor=self.pfactor,
+                                            method='bbox',unit='2th_deg', mask=mask, error_model='poisson',radial_range=(tthmin,tthmax), 
                                             azimuth_range=(chimin, chimax), npt_azim=chibins)
 
         self.array2d = self.result2d[0]
@@ -224,7 +228,9 @@ class ImagePoni():
             self.saveCake(cakedir=cakedir)
         if xyedir:
             self.save1d(xyedir=xyedir)
-
+    def fluosub(self, fluoK):
+        polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
+        self.cake_fluosub = fluoSub_integrated_base(self.array2d, polcake, fluoK)
     def saveCake(self,cakedir = 'cake'):
         outdir = f'{self.dirname}/{cakedir}'
         os.makedirs(outdir,exist_ok=True)
@@ -236,25 +242,25 @@ class ImagePoni():
         os.makedirs(outdir,exist_ok=True)
         np.savetxt(outfile, np.array([self.x,self.y,self.e]).transpose(), fmt = '%.6f')
 
-    def getMaps(self, polarization_factor):
+    def getMaps(self):
 
-        self.ttharray:np.ndarray = self.geometry.twoThetaArray()*180/np.pi
-        self.chiarray:np.ndarray = self.geometry.chiArray()
-        self.pol:np.ndarray = self.geometry.polarization(factor=polarization_factor)
-        self.sa :np.ndarray = self.geometry.solidAngleArray()
+        self.tthmap:np.ndarray = self.geometry.twoThetaArray()*180/np.pi
+        self.chimap:np.ndarray = self.geometry.chiArray()
+        self.polmap:np.ndarray = self.geometry.polarization(factor=self.pfactor)
+        self.samap :np.ndarray = self.geometry.solidAngleArray()
         dety,detx,_ = self.geometry.detector.calc_cartesian_positions()
         ponidist = ((dety-self.poni1)**2 + (detx - self.poni2)**2)**0.5
-        self.sampledist = (ponidist**2 + self.dist**2)**0.5
-        self.sinchi2:np.ndarray = np.sin(self.chiarray)**2
+        self.sampledistmap = (ponidist**2 + self.dist**2)**0.5
+        self.sinchi2:np.ndarray = np.sin(self.chimap)**2
         
-        self.absSolidAngle = self.geometry.solidAngleArray(absolute=True)
+        self.absSolidAnglemap = self.geometry.solidAngleArray(absolute=True)
         self.mapscalculated = True
-        self.arrayCorrected = self.array/(self.pol*self.absSolidAngle*self.solidanglescale)
+        self.arrayCorrected = self.array/(self.polmap*self.absSolidAnglemap*self.solidanglescale)
         
 
-    def saveMaps(self,dirname, polarization_factor):
+    def saveMaps(self,dirname):
         if not self.mapscalculated:
-            self.getMaps(polarization_factor)
+            self.getMaps(self.pfactor)
         basename = os.path.splitext(os.path.basename(self.fname))[0]
         basename += '.edf'
         os.makedirs(f'{dirname}/tth',exist_ok=True)
@@ -262,21 +268,21 @@ class ImagePoni():
         os.makedirs(f'{dirname}/pol',exist_ok=True)
         os.makedirs(f'{dirname}/chi',exist_ok=True)
         os.makedirs(f'{dirname}/sampleDist',exist_ok=True)
-        im = EdfImage(self.ttharray)
+        im = EdfImage(self.tthmap)
         im.save(f'{dirname}/tth/{basename}')
-        im = EdfImage(self.chiarray)
+        im = EdfImage(self.chimap)
         im.save(f'{dirname}/chi/{basename}')
-        im=EdfImage(self.pol)
+        im=EdfImage(self.polmap)
         im.save(f'{dirname}/pol/{basename}')
-        im=EdfImage(self.sa)
+        im=EdfImage(self.samap)
         im.save(f'{dirname}/sa/{basename}')
-        im = EdfImage(self.sampledist)
+        im = EdfImage(self.sampledistmap)
         im.save(f'{dirname}/sampleDist/{basename}')
 
 
     def arrayBins(self,tthbins:int, chibins:int, tthmax:float):
         tthmax = tthmax*np.pi/180
-        self.tthbinarray = (self.ttharray*tthbins/tthmax).astype(int)
+        self.tthbinarray = (self.tthmap*tthbins/tthmax).astype(int)
         self.chibinarray = (self.sinchi2*chibins).astype(int)
         self.combinedbinarray = self.tthbinarray+1j*self.chibinarray
         return self.combinedbinarray
@@ -303,7 +309,7 @@ class MultiFile():
         for f in self.list:
             f.saveMaps(dirname)
         
-    def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354, polarization_factor= 0.85,  outsubdir= 'xye', 
+    def average1d(self,tthmin,tthmax,tthbins, chimin=-178, chimax=178, chibins=354,   outsubdir= 'xye', 
                   fname='', **kwargs):
         '''
         run the interpolations (if not done already) and regrid and average all 1d patterns
@@ -316,9 +322,9 @@ class MultiFile():
         print(f'integrating images')
         for file in self.list:
             print(file.fname)
-            file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins, polarization_factor=polarization_factor,**kwargs)
-        self.polarization_factor=polarization_factor
+            file.integrate(tthmin,tthmax,tthbins=tthbins, chimin=chimin, chimax=chimax, chibins=chibins,**kwargs)
         
+        self.pfactor = file.pfactor
         self.x = self.list[0].x
         avarray = np.empty(shape=(len(self.x), len(self.list)))
         for i,file in enumerate(self.list):
@@ -330,16 +336,22 @@ class MultiFile():
             outfile = f'{outdir}/{fname}av1d.xy'
             np.savetxt(outfile,np.array([self.x,self.yav]).transpose(),fmt='%.6f')
         return self.x,self.yav
-    def average2d(self,outsubdir='cake',fname='', nstdevs=3, medianfilter=4, cakemask=None):
+    def average2d(self,outsubdir='cake',fname='', nstdevs=3, medianfilter=4, cakemask=None, fluoK = 0):
         print('averaging cakes')
         if cakemask:
             cakemask = fabio.open(cakemask).data
         else:
             cakemask=0
+        if fluoK:
+            outsubdir += 'fluosub'
         for i,item in enumerate(self.list):
             if i == 0:
                 allarrays = np.empty(shape=(*item.array2d.shape,len(self.list)))
-            allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
+            if fluoK:
+                item.fluosub(fluoK )
+                allarrays[:,:,i] = np.where(item.cake_fluosub <= 0 ,np.nan, item.array2d)
+            else:
+                allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
         masks = self._getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
         allarrays = np.where(masks == 1, np.nan, allarrays)
         self.avarray = np.nanmean(allarrays,axis=2)
@@ -357,7 +369,20 @@ class MultiFile():
             os.makedirs(outdir,exist_ok=True)
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
-            #np.savetxt(f'{outdir}/{fname}av2d_cake.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
+            np.savetxt(f'{outdir}/{fname}av2d_alt.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
+    def fluosubav(self,k0):
+        fc = FluosubCake(pfactor=self.pfactor)
+        polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
+        self.avcakefluosub = fc.optimise_fluoIntegrated(self.avarray, polcake, k0)
+        self.fluoK = fc.kopt
+    def average2d_optimise_rerun(self, k0, **kwargs):
+        '''
+        slow - runs the integration twice, once to get the average, then optimise fluo correction, 
+        then rerun with fluo subtraction
+        '''
+        self.average2d(**kwargs)
+        self.fluosubav(k0)
+        self.average2d(fluoK = self.fluoK, **kwargs)
     def _getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         '''
         for applying cosmic masking and mask for final cake
