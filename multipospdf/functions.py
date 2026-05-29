@@ -147,7 +147,7 @@ class PoniList():
 
         
 class ImagePoni():
-    def __init__(self, fname:str, ypos:float, ponilist:PoniList, zpos:float = None, maskfile:str = None, pfactor=0.85):
+    def __init__(self, fname:str, ypos:float,  zpos:float, ponilist:PoniList, maskfile:str = None, pfactor=0.85):
         self.fname = fname
         self.dirname = os.path.dirname(self.fname)
         self.basename = os.path.splitext(os.path.basename(self.fname))[0]
@@ -162,7 +162,7 @@ class ImagePoni():
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
         self.array = CbfImage(fname).array
-        self.pfactor = 0.85 
+        self.pfactor = pfactor
 
         self.integrated = False
         self.mapscalculated = False
@@ -287,8 +287,9 @@ class ImagePoni():
         self.chibinarray = (self.sinchi2*chibins).astype(int)
         self.combinedbinarray = self.tthbinarray+1j*self.chibinarray
         return self.combinedbinarray
-    def saveponi(self, filename):
-        dirname = os.path.dirname(filename)
+    def saveponi(self, subdir):
+        dirname = f'{self.dirname}/{subdir}'
+        filename = f'{dirname}/{self.basename}.poni'
         os.makedirs(dirname, exist_ok=True)
         self.ai.save(filename)
         self.ponifile = filename
@@ -415,9 +416,7 @@ class MultiFile():
         im.save(f'{dirname}/av2d_noheader.edf')
     def saveAllPonis(self,subdir = 'poni'):
         for item in self.list:
-            basename = os.path.splitext(os.path.basename(item.fname))[0]
-            dirname = os.path.dirname(item.fname)
-            item.saveponi(f'{dirname}/{subdir}/{basename}.poni')
+            item.saveponi(subdir)
 
     def __getitem__(self, key):
         return self.list[key]
