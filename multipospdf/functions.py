@@ -355,7 +355,7 @@ class MultiFile():
             else:
                 allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
         masks = self._getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
-        allarrays = np.where(masks == 1, np.nan, allarrays)
+        allarrays = np.where(masks >0, np.nan, allarrays)
         self.avarray = np.nanmean(allarrays,axis=2)
         self.ycake = np.nanmean(self.avarray,axis=0)
         self.avarray = np.where(np.isnan(self.avarray),0, self.avarray)

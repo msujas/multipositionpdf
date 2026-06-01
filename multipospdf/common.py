@@ -29,7 +29,7 @@ def getponilist(ponidir):
         ponilist.append(PoniYZ(file, y,z))
     return PoniList(ponilist)
 
-def getIPlist(cbfdir,ponilist:PoniList):
+def getIPlist(cbfdir,ponilist:PoniList, maskfile=None, pfactor=0.85):
     files = glob(f'{cbfdir}/*.cbf')
     iplist = []
     for file in files:
@@ -38,5 +38,5 @@ def getIPlist(cbfdir,ponilist:PoniList):
         except:
             print(f"couldn't extract y and z positions for {file}. Skipping")
             continue
-        iplist.append(ImagePoni(file, y,z,ponilist))
+        iplist.append(ImagePoni(file, y,z,ponilist, maskfile, pfactor))
     return MultiFile(iplist)
