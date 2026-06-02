@@ -3,7 +3,7 @@ from multipos_rustpy import integrate_rp
 import time
 
 def runintegration_rp(cbfdir, ponidir, tthmin:float, tthmax:float,tthbins:int, chimin:float, chimax:float, 
-                      chibins:int, pfactor:float=0.85, maskfile=None, savcakes=False,outsubdir='cakes',
+                      chibins:int, pfactor:float=0.85, maskfile=None, savecakes=False,outsubdir='cakes',
                       cakemaskfile=None, ponipattern = '*.poni', outponisubdir = 'ponis_rp'):
     '''
     a function for collecting poni and cbf files. Interpolating in Python (SciPy), then integrating and averaging with 
@@ -25,6 +25,6 @@ def runintegration_rp(cbfdir, ponidir, tthmin:float, tthmax:float,tthbins:int, c
     newponidir = f'{cbfdir}/{outponisubdir}'
     print(f'ponis interpolated and saved to {newponidir}. Elapsed time {time.time()-t0:.2f} s')
     print('running integration with Rust extension')
-    integrate_rp(cbfdir, newponidir, tthmin, tthmax,tthbins, chimin,chimax,chibins,pfactor, maskfile, savcakes,
+    integrate_rp(cbfdir, newponidir, tthmin, tthmax,tthbins, chimin,chimax,chibins,pfactor, maskfile, savecakes,
                  outsubdir, cakemaskfile)
     print(f'finished. Total time elapsed: {time.time()-t0:.2f} s')
