@@ -4,13 +4,13 @@ import time
 
 def runintegration_rp(cbfdir, ponidir, tthmin:float, tthmax:float,tthbins:int, chimin:float, chimax:float, 
                       chibins:int, pfactor:float=0.85, maskfile=None, savcakes=False,outsubdir='cakes',
-                        cakemaskfile=None):
+                        cakemaskfile=None, ponipattern = '*.poni'):
     '''
     a function for collecting poni and cbf files. Interpolating in Python (SciPy), then integrating and averaging with 
     a Rust extension. Requires installation of the multipos_rustpy library
     '''
     t0 = time.time()
-    plist = getponilist(ponidir)
+    plist = getponilist(ponidir,ponipattern)
     mf = getIPlist(cbfdir,plist)
     ponisubdir = 'ponis_rp'
     mf.saveAllPonis(ponisubdir)

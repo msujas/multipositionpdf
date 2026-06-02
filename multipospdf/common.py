@@ -17,8 +17,8 @@ def getyz(file): #assuming files are in format: x_dty125.40_dtz135.00_...
     return ypos,zpos
 
 
-def getponilist(ponidir):
-    files = glob(f'{ponidir}/*.poni')
+def getponilist(ponidir, ponipattern = '*.poni'):
+    files = glob(f'{ponidir}/{ponipattern}')
     ponilist= []
     for file in files:
         try:
