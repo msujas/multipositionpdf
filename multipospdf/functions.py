@@ -371,20 +371,26 @@ class MultiFile():
             os.makedirs(outdir,exist_ok=True)
             bubbleHeader(f'{outdir}/{fname}av2d.edf', self.avarray , self.tth, self.chi, self.ycake2,self.ycake**0.5)
             np.savetxt(f'{outdir}/{fname}av2d.xy',np.array([self.tth,self.ycake2]).transpose(),fmt = '%.6f')
-            np.savetxt(f'{outdir}/{fname}av2d_alt.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
+            np.savetxt(f'{outdir}/{fname}av2d_2.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
     def fluosubav(self,k0):
         fc = FluosubCake(pfactor=self.pfactor)
-        polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
-        self.avcakefluosub = fc.optimise_fluoIntegrated(self.avarray, polcake, k0)
+        self.polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
+        self.avcakefluosub = fc.optimise_fluoIntegrated(self.avarray, self.polcake, k0)
         self.fluoK = fc.kopt
-    def average2d_optimise_rerun(self, k0, **kwargs):
+    def average2d_optimise_rerun(self, k0, outsubdir, fname, **kwargs):
         '''
         slow - runs the integration twice, once to get the average, then optimise fluo correction, 
         then rerun with fluo subtraction
         '''
         self.average2d(**kwargs)
         self.fluosubav(k0)
-        self.average2d(fluoK = self.fluoK, **kwargs)
+        basedir = os.path.dirname(self.list[0].fname)
+        outdir = f'{basedir}/{outsubdir}fluoSub'
+        outfile = f'{outdir}/{fname}_fluosub1.edf'
+        y= np.nanmean(np.where(self.avcakefluosub<=0, np.nan, self.avcakefluosub), axis=1)
+        bubbleHeader(outfile, self.avcakefluosub, self.tth, self.chi, y, y**0.5)
+        np.savetxt(f'{outdir}/{fname}av1d_1.xy', np.array([self.tth, y]).transpose(), fmt = '%.6f')
+        self.average2d(fluoK = self.fluoK, outsubdir=outsubdir, fname=fname, **kwargs)
     def _getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         '''
         for applying cosmic masking and mask for final cake
