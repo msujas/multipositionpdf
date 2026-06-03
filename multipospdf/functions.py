@@ -351,7 +351,7 @@ class MultiFile():
                 allarrays = np.empty(shape=(*item.array2d.shape,len(self.list)))
             if fluoK:
                 item.fluosub(fluoK )
-                allarrays[:,:,i] = np.where(item.cake_fluosub <= 0 ,np.nan, item.array2d)
+                allarrays[:,:,i] = np.where(item.cake_fluosub <= 0 ,np.nan, item.cake_fluosub)
             else:
                 allarrays[:,:,i] = np.where(item.array2d <= 0 ,np.nan, item.array2d)
         masks = self._getmasks(allarrays, cakemask, nstdevs=nstdevs,medianfilter=medianfilter)
@@ -382,12 +382,13 @@ class MultiFile():
         slow - runs the integration twice, once to get the average, then optimise fluo correction, 
         then rerun with fluo subtraction
         '''
-        self.average2d(**kwargs)
+        self.average2d(outsubdir=outsubdir, fname=fname,**kwargs)
         self.fluosubav(k0)
         basedir = os.path.dirname(self.list[0].fname)
         outdir = f'{basedir}/{outsubdir}fluoSub'
+        os.makedirs(outdir,exist_ok=True)
         outfile = f'{outdir}/{fname}_fluosub1.edf'
-        y= np.nanmean(np.where(self.avcakefluosub<=0, np.nan, self.avcakefluosub), axis=1)
+        y= np.nanmean(np.where(self.avcakefluosub<=0, np.nan, self.avcakefluosub), axis=0)
         bubbleHeader(outfile, self.avcakefluosub, self.tth, self.chi, y, y**0.5)
         np.savetxt(f'{outdir}/{fname}av1d_1.xy', np.array([self.tth, y]).transpose(), fmt = '%.6f')
         self.average2d(fluoK = self.fluoK, outsubdir=outsubdir, fname=fname, **kwargs)
