@@ -4,6 +4,8 @@ Usage: Must make ponis for a handful of calibration images (5 or so, must includ
 
 The MultiFile class then takes a list of all the ImagePoni objects. It averages and merges all the cake arrays, filtering cosmics and outliers, saves a merged cake file, and 1D merged patterns.
 
+There's a rust extension which runs faster than the default Python version. To use clone the multipos_rustpy library https://github.com/msujas/multipos_rustpy, then install. Use build.bat or build.sh, or run individual commands in terminal.
+
 2D interpolation of ponis
 ![alt text](images/2dinterpolations.png)
 
