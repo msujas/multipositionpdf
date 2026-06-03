@@ -377,7 +377,7 @@ class MultiFile():
         self.polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
         self.avcakefluosub = fc.optimise_fluoIntegrated(self.avarray, self.polcake, k0)
         self.fluoK = fc.kopt
-    def average2d_optimise_rerun(self, k0, outsubdir, fname, **kwargs):
+    def average2d_optimise_rerun(self, k0, outsubdir, fname,saveindividual=False, **kwargs):
         '''
         slow - runs the integration twice, once to get the average, then optimise fluo correction, 
         then rerun with fluo subtraction
@@ -385,13 +385,17 @@ class MultiFile():
         self.average2d(outsubdir=outsubdir, fname=fname,**kwargs)
         self.fluosubav(k0)
         basedir = os.path.dirname(self.list[0].fname)
-        outdir = f'{basedir}/{outsubdir}fluoSub'
+        outdir = f'{basedir}/{outsubdir}fluosub'
         os.makedirs(outdir,exist_ok=True)
         outfile = f'{outdir}/{fname}_fluosub1.edf'
         y= np.nanmean(np.where(self.avcakefluosub<=0, np.nan, self.avcakefluosub), axis=0)
         bubbleHeader(outfile, self.avcakefluosub, self.tth, self.chi, y, y**0.5)
         np.savetxt(f'{outdir}/{fname}av1d_1.xy', np.array([self.tth, y]).transpose(), fmt = '%.6f')
         self.average2d(fluoK = self.fluoK, outsubdir=outsubdir, fname=fname, **kwargs)
+        if saveindividual:
+            for item in self.list:
+                y = np.nanmean(np.where(item.cake_fluosub<=0, np.nan, item.cake_fluosub), axis=0)
+                bubbleHeader(f'{outdir}/{item.basename}.edf', item.cake_fluosub, self.tth,self.chi, y, y**0.5)
     def _getmasks(self,data:np.ndarray,cakemask:np.ndarray|int = 0, nstdevs=3,medianfilter = 4):
         '''
         for applying cosmic masking and mask for final cake
