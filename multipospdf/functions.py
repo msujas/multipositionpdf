@@ -147,7 +147,7 @@ class PoniList():
 
         
 class ImagePoni():
-    def __init__(self, fname:str, ypos:float,  zpos:float, ponilist:PoniList, maskfile:str = None, pfactor=0.85):
+    def __init__(self, fname:str, ypos:float,  zpos:float, ponilist:PoniList, maskfile:str = None, pfactor=0.85, wavelength = None):
         self.fname = fname
         self.dirname = os.path.dirname(self.fname)
         self.basename = os.path.splitext(os.path.basename(self.fname))[0]
@@ -161,6 +161,8 @@ class ImagePoni():
         self.aiexample:AzimuthalIntegrator = ponilist[0].poni
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
+        if wavelength:
+            self.wavelength = wavelength
         self.array = CbfImage(fname).array
         self.pfactor = pfactor
 
@@ -200,6 +202,8 @@ class ImagePoni():
 
     def integrate(self, tthmin, tthmax,tthbins=5000,  chimin = -178, chimax=178, chibins = 354, gainfile = None, xyedir = None, 
                   cakedir = None,  scale = 10**5, unit:Literal["2th_deg", "q_A^-1"] = '2th_deg'):
+        if unit not in ["2th_deg", "q_A^-1"]:
+            raise ValueError("unit must be '2th_deg' or 'q_A^-1'")
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
@@ -321,6 +325,7 @@ class MultiFile():
         outsubdir - subdirectory for averaged 1d file
         kwargs - kwargs for interpolation
         '''
+        self.unit=unit
         print(f'integrating images')
         for file in self.list:
             print(file.fname)
@@ -374,7 +379,11 @@ class MultiFile():
             np.savetxt(f'{outdir}/{fname}av2d_2.xy',np.array([self.tth,self.ycake]).transpose(),fmt = '%.6f')
     def fluosubav(self,k0):
         fc = FluosubCake(pfactor=self.pfactor)
-        self.polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
+        match self.unit:
+            case "q_A^-1": tth = np.asin(self.tth*self.list[0].wavelength*(10**10)/(4*np.pi))*2*180/np.pi
+            case "2th_deg": tth = self.tth
+            case _: raise ValueError("unit must be 'q_A^-1' or '2th_deg'")
+        self.polcake = getpolcakebase(tth, self.chi, self.pfactor)
         self.avcakefluosub = fc.optimise_fluoIntegrated(self.avarray, self.polcake, k0)
         self.fluoK = fc.kopt
     def average2d_optimise_rerun(self, k0, outsubdir, fname,saveindividual=False, **kwargs):
