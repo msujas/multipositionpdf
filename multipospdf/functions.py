@@ -14,7 +14,9 @@ try:
 except ImportError:
     print("couldn't import fluo correction library. Fluo correction not available. Try installing it if needed")
 
-
+def qtotth(q, wavelength_m):
+    wavelength = wavelength_m*10**10
+    return np.asin(q*wavelength/(4*np.pi))*2*180/np.pi
 
 def bubbleHeader(file2d,array2d, tth, eta, y, e):
     xye = np.array([tth,y,e]).transpose().flatten()
@@ -162,7 +164,7 @@ class ImagePoni():
         self.detector = self.aiexample.detector
         self.wavelength = self.aiexample.wavelength
         if wavelength:
-            self.wavelength = wavelength
+            self.wavelength = wavelength*10**-10
         self.array = CbfImage(fname).array
         self.pfactor = pfactor
 
@@ -204,6 +206,7 @@ class ImagePoni():
                   cakedir = None,  scale = 10**5, unit:Literal["2th_deg", "q_A^-1"] = '2th_deg'):
         if unit not in ["2th_deg", "q_A^-1"]:
             raise ValueError("unit must be '2th_deg' or 'q_A^-1'")
+        self.unit = unit
         mask = np.where(self.array < 0,1,0)
         if self.maskfile:
             mask = fabio.open(self.maskfile).data
@@ -234,7 +237,10 @@ class ImagePoni():
         if xyedir:
             self.save1d(xyedir=xyedir)
     def fluosub(self, fluoK):
-        polcake = getpolcakebase(self.tth, self.chi, self.pfactor)
+        match self.unit:
+            case 'q_A^-1': tth = qtotth(self.tth, self.wavelength)
+            case 'tth_deg': tth = self.tth
+        polcake = getpolcakebase(tth, self.chi, self.pfactor)
         self.cake_fluosub = fluoSub_integrated_base(self.array2d, polcake, fluoK)
     def saveCake(self,cakedir = 'cake'):
         outdir = f'{self.dirname}/{cakedir}'
@@ -380,7 +386,7 @@ class MultiFile():
     def fluosubav(self,k0):
         fc = FluosubCake(pfactor=self.pfactor)
         match self.unit:
-            case "q_A^-1": tth = np.asin(self.tth*self.list[0].wavelength*(10**10)/(4*np.pi))*2*180/np.pi
+            case "q_A^-1": tth = qtotth(self.tth,self.list[0].wavelength)
             case "2th_deg": tth = self.tth
             case _: raise ValueError("unit must be 'q_A^-1' or '2th_deg'")
         self.polcake = getpolcakebase(tth, self.chi, self.pfactor)
