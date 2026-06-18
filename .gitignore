@@ -8,3 +8,5 @@ images/pdfCompare.png
 airabsorption.py
 integrationScript_rust.py
 build
+integrateall_multipos.py
+integrateall_multipos_resonant.py
