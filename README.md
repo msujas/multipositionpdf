@@ -44,3 +44,34 @@ for d in datasubdirs:
     main(f'{ponidir}/{d}',fname=d)
 ```
 
+To use the rust extension (similar but faster). First install the Rust library with Python bindings (https://github.com/msujas/multipos_rustpy).
+
+The rust function can the be used:
+```python
+from multipospdf.rustext import runintegration_rp
+
+help(runintegration_rp)
+```
+output
+```
+runintegration_rp(
+    cbfdir,
+    ponidir,
+    tthmin: float,
+    tthmax: float,
+    tthbins: int,
+    chimin: float,
+    chimax: float,
+    chibins: int,
+    pfactor: float = 0.85,
+    maskfile=None,
+    savecakes=False,
+    outsubdir='cakes',
+    cakemaskfile=None,
+    ponipattern='*.poni',
+    outponisubdir='ponis_rp',
+    maskdir=None,
+    fluocorrection=False,
+    fluok0=1.0
+)
+```
