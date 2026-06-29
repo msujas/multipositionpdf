@@ -35,7 +35,7 @@ def correctImage(imagefile, poniyz, pfactor=0.85, outsubdir='polsaCorrected') ->
     if outsubdir:
         outdir = f'{os.path.dirname(imagefile)}/{outsubdir}'
         os.makedirs(outdir,exist_ok=True)
-        outfile = f'{outdir}/{os.path.basename(imagefile)}'
+        outfile = f'{outdir}/{os.path.basename(imagefile)}'.replace('.cbf','.edf')
         im = EdfImage(data=correctedarray)
         im.save(outfile)
     return correctedarray
