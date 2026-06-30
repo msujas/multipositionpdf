@@ -5,6 +5,7 @@ from .common import getyz
 from .functions import PoniYZ
 import math, os
 from fabio.edfimage import EdfImage
+from glob import glob
 
 def estponi(poniyz:PoniYZ, posy,posz)->Geometry:
     '''
@@ -27,7 +28,7 @@ def estponi(poniyz:PoniYZ, posy,posz)->Geometry:
                                   detector=geo.detector, wavelength=geo.wavelength)
     return newgeo
 
-def correctImage(imagefile, poniyz, pfactor=0.85, outsubdir='polsaCorrected') -> np.ndarray:  
+def correctImage(imagefile, poniyz:PoniYZ, pfactor=0.85, outsubdir='polsaCorrected') -> np.ndarray:  
     y,z = getyz(imagefile)
     array = CbfImage(imagefile).array
     geo:Geometry = estponi(poniyz, y,z)
@@ -41,3 +42,7 @@ def correctImage(imagefile, poniyz, pfactor=0.85, outsubdir='polsaCorrected') ->
     return correctedarray
 
 
+def correctdir(dirname, poniyz:PoniYZ, pfactor=0.85, outsubdir='polsaCorrected' ):
+    files = glob(f'{dirname}/*.cbf')
+    for file in files:
+        correctImage(file, poniyz, pfactor=pfactor, outsubdir=outsubdir)
