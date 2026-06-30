@@ -3,9 +3,15 @@ import numpy as np
 from pyFAI.geometry import Geometry
 from .common import getyz
 from .functions import PoniYZ
-import math, os
+import math, os, fabio
 from fabio.edfimage import EdfImage
 from glob import glob
+
+
+def gainCorrection(avim,gainArray):
+    avimGain = avim/gainArray
+    avimGain = np.where(gainArray <0, -1, avimGain)
+    return avimGain
 
 def estponi(poniyz:PoniYZ, posy,posz)->Geometry:
     '''
@@ -46,3 +52,30 @@ def correctdir(dirname, poniyz:PoniYZ, pfactor=0.85, outsubdir='polsaCorrected' 
     files = glob(f'{dirname}/*.cbf')
     for file in files:
         correctImage(file, poniyz, pfactor=pfactor, outsubdir=outsubdir)
+
+
+def gaincorrectdir(dirname,gainfile, ext = 'cbf', outsubdir = 'GC'):
+    gainarray = fabio.open(gainfile).data
+    files = glob(f'{dirname}/*.{ext}')
+    newdir = f'{dirname}/{outsubdir}'
+    os.makedirs(newdir,exist_ok=True)
+    for file in files:
+        array = CbfImage(file).array
+        arraygc = gainCorrection(array,gainarray)
+        basename = os.path.splitext(os.path.basename(file))[0]
+        newfile = f'{newdir}/{basename}.edf'
+        im = EdfImage(data=arraygc)
+        im.save(newfile)
+
+def correctdir_polsagain(dirname, gainfile, poniyz:PoniYZ, pfactor=0.85, outsubdir='polsaGC'):
+    files = glob(f'{dirname}/*.cbf')
+    newdir = f'{dirname}/{outsubdir}'
+    os.makedirs(newdir,exist_ok=True)
+    gainarray = fabio.open(gainfile).data
+    for file in files:
+        arraycorrected = correctImage(file,poniyz, pfactor=pfactor, outsubdir=None)
+        arraycorrected = gainCorrection(arraycorrected, gainarray)
+        newfile = f'{newdir}/{os.path.basename(file)}'.replace('.cbf','.edf')
+        im = EdfImage(arraycorrected)
+        im.save(newfile)
+
