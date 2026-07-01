@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d, LinearNDInterpolator
 from pyFAI.geometry import Geometry
 from typing import Literal
+from datetime import datetime
+import time
 try:
     from fluoCorrectionPilatus import fluoSub_integrated_base, getpolcakebase, FluosubCake
 except ImportError:
@@ -256,13 +258,14 @@ class ImagePoni():
     def getMaps(self):
 
         self.tthmap:np.ndarray = self.geometry.twoThetaArray()*180/np.pi
-        self.chimap:np.ndarray = self.geometry.chiArray()
+        self.chimap:np.ndarray = self.geometry.chiArray()*180/np.pi
         self.polmap:np.ndarray = self.geometry.polarization(factor=self.pfactor)
         self.samap :np.ndarray = self.geometry.solidAngleArray()
         dety,detx,_ = self.geometry.detector.calc_cartesian_positions()
         ponidist = ((dety-self.poni1)**2 + (detx - self.poni2)**2)**0.5
         self.sampledistmap = (ponidist**2 + self.dist**2)**0.5
-        self.sinchi2:np.ndarray = np.sin(self.chimap)**2
+        self.sinchi2:np.ndarray = np.sin(self.chimap*np.pi/180)**2
+        self.mask = fabio.open(self.maskfile).data
         
         self.absSolidAnglemap = self.geometry.solidAngleArray(absolute=True)
         self.mapscalculated = True
@@ -450,4 +453,59 @@ class MultiFile():
         return item in self.list
     def __iter__(self):
         return iter(self.list)
+    def generatemasks(self):
+        for item in self.list:
+            item.getMaps()
+            
+    def calculateflatfield(self, tthmin, tthmax, tthbins=5000, chimin=-178,chimax=178):
+        spacing = (tthmax-tthmin)/(tthbins-1)
+        bins : np.ndarray = np.linspace(tthmin,tthmax, tthbins)
+        binvalues = np.zeros(shape = tthbins) 
+        bindivs = np.zeros(shape = bins.shape)
+        binindexes = np.zeros(shape = (*self.list[0].array.shape,len(self.list)), dtype=int) -1
+        print('calculating pattern')
+        for i,item in enumerate(self.list):
+            item.getMaps()
+            for y in range(item.arrayCorrected.shape[0]):
+                for x in range(item.arrayCorrected.shape[1]):
+                    tth = item.tthmap[y,x]
+                    chi = item.chimap[y,x]
+                    value = item.arrayCorrected[y,x]
+                    maskvalue = item.mask[y,x]
+                    if tth < tthmin - spacing/2 or tth > tthmax + spacing/2 or maskvalue > 0 or value <=0 \
+                    or chi < chimin or chi > chimax:
+                        continue
+                    bindex = np.argmin(np.abs(bins - tth))
+                    binvalues[bindex] += value
+                    bindivs[bindex] += 1
+                    binindexes[y,x,i] = bindex
+
+        avpattern = binvalues/bindivs
+        avpattern = np.where(np.isnan(avpattern), 0, avpattern)
+        print('pattern calculated')
+        plt.plot(avpattern)
+        plt.show()
+        print('calculating maps')
+        flatfieldstack = np.zeros(shape = (*self.list[0].array.shape, len(self.list))) - 1
+        for i,item in enumerate(self.list):
+            for y in range(item.arrayCorrected.shape[0]):
+                for x in range(item.arrayCorrected.shape[1]):
+                    value = item.arrayCorrected[y,x]
+                    binindex = binindexes[y,x,i]
+                    if binindex < 0:
+                        continue
+                    avvalue = avpattern[binindex]
+                    flatfieldstack[y,x,i] = value/avvalue
+        flatfield = np.nanmean(np.where(flatfieldstack<0, np.nan, flatfieldstack), axis=2)
+        flatfield = np.where(np.isnan(flatfield),-1, flatfield)
+
+        flatfield = np.where((flatfield > 1.5) | (flatfield < 0.7), -1, flatfield) #filter by value
+
+        self.flatfield = flatfield
+        dt = datetime.fromtimestamp(time.time())
+        dtstring = f'{dt.year:04d}{dt.month:02d}{dt.day:02d}'
+        fname = f'{self.list[0].dirname}/flatfield_{dtstring}.edf'
+        im = EdfImage(self.flatfield)
+        im.save(fname)
+
 
